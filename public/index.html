@@ -66,6 +66,7 @@ html,body{height:100%;margin:0;background:var(--void);color:var(--ink);overflow:
 .keys{display:grid;grid-template-columns:auto minmax(0,1fr);gap:7px 14px;margin:0}
 .keys dt{font-family:var(--f-hud);font-weight:700;color:var(--gold);white-space:nowrap}
 .keys dd{margin:0}
+.tip{margin:12px 0 0;color:var(--ink-dim);font-size:13px;line-height:1.5}
 .only-touch{display:none!important}
 @media (pointer:coarse){.only-touch{display:grid!important}.only-keys{display:none!important}}
 .opts{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:14px;color:var(--ink-dim)}
@@ -84,19 +85,23 @@ html,body{height:100%;margin:0;background:var(--void);color:var(--ink);overflow:
 #resRank{color:var(--gold)}
 .res-note{min-height:1.5em;margin:0 0 20px;line-height:1.6}
 .err{color:var(--alert);font-size:16px}
-/* touch controls */
-#touch{position:absolute;inset:0;pointer-events:none}
-#stickZone{position:absolute;left:0;bottom:0;width:50%;height:70%;pointer-events:auto}
-#stickBase{position:absolute;width:120px;height:120px;margin:-60px 0 0 -60px;border-radius:50%;border:2px solid rgba(63,182,255,.55);background:rgba(9,16,44,.35)}
-#stickKnob{position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px 0 0 -26px;border-radius:50%;background:rgba(234,242,255,.85)}
-#tbtns{position:absolute;right:max(14px,env(safe-area-inset-right,0px));bottom:max(16px,env(safe-area-inset-bottom,0px));
-  display:grid;grid-template-columns:repeat(3,64px);grid-template-rows:repeat(2,64px);gap:10px;pointer-events:auto}
-.tb{font-family:var(--f-hud);font-weight:700;font-size:12px;letter-spacing:.06em;border-radius:50%;border:2px solid rgba(63,182,255,.6);
-  background:rgba(9,16,44,.5);color:var(--ink);touch-action:none;padding:0}
-.tb.on{background:rgba(255,138,31,.75);color:#1d0d00}
-.tb.big{grid-column:3;grid-row:1 / span 2;align-self:center;width:72px;height:72px;margin-left:-4px;border-color:var(--team);font-size:14px}
-#tpause{position:absolute;top:max(12px,env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);width:44px;height:36px;
-  border-radius:8px;border:1px solid rgba(63,182,255,.6);background:rgba(9,16,44,.5);color:var(--ink);font-family:var(--f-hud);font-weight:700;pointer-events:auto}
+/* touch controls (Roblox-style: thumbstick on the left, one big action button on the right) */
+#touch{position:absolute;inset:0;pointer-events:none;--stick:clamp(120px,17vmin,170px);--big:clamp(96px,14vmin,128px);--small:clamp(64px,9vmin,84px)}
+#stickZone{position:absolute;left:0;bottom:0;width:50%;height:78%;pointer-events:auto;touch-action:none}
+#stickBase{position:absolute;width:var(--stick);height:var(--stick);transform:translate(-50%,-50%);border-radius:50%;
+  background:rgba(0,0,0,.3);box-shadow:inset 0 0 0 3px rgba(255,255,255,.6);transition:opacity .15s}
+#stickBase.idle{opacity:.5}
+#stickKnob{position:absolute;left:50%;top:50%;width:44%;height:44%;margin:-22% 0 0 -22%;border-radius:50%;background:rgba(255,255,255,.9);box-shadow:0 2px 10px rgba(0,0,0,.35)}
+#tbtns{position:absolute;right:max(22px,env(safe-area-inset-right,0px));bottom:max(22px,env(safe-area-inset-bottom,0px));width:1px;height:1px;pointer-events:none}
+.tb{position:absolute;border:0;padding:0;border-radius:50%;background:rgba(0,0,0,.3);box-shadow:inset 0 0 0 3px rgba(255,255,255,.6);color:#fff;
+  touch-action:none;pointer-events:auto;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-family:var(--f-jp);font-weight:700;font-size:12px;line-height:1;transition:transform .06s}
+.tb svg{width:42%;height:42%;fill:none;stroke:#fff;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.tb.big{right:0;bottom:0;width:var(--big);height:var(--big);font-size:14px}
+.tb.bomb{right:calc(var(--big)*.6);bottom:calc(var(--big)*1.04);width:var(--small);height:var(--small)}
+.tb.roll{right:calc(var(--big)*1.1);bottom:calc(var(--big)*.2);width:var(--small);height:var(--small)}
+.tb.on{background:rgba(255,255,255,.32);transform:scale(.93)}
+#tpause{position:absolute;top:max(12px,env(safe-area-inset-top,0px));left:50%;transform:translateX(-50%);width:48px;height:40px;
+  border-radius:10px;border:0;box-shadow:inset 0 0 0 2px rgba(255,255,255,.6);background:rgba(0,0,0,.3);color:#fff;font-family:var(--f-hud);font-weight:700;pointer-events:auto}
 @media (max-height:600px){
   .screen{padding-block:16px}
   .logo{font-size:clamp(40px,9vh + 12px,72px)}
@@ -130,20 +135,19 @@ html,body{height:100%;margin:0;background:var(--void);color:var(--ink);overflow:
         <h2>FLIGHT CONTROLS</h2>
         <dl class="keys only-keys">
           <dt>WASD / 矢印</dt><dd>移動</dd>
-          <dt>Space / J</dt><dd>ショット（長押しでロックオン）</dd>
-          <dt>B / K</dt><dd>ボム（もう一度押すと起爆）</dd>
-          <dt>Shift / L</dt><dd>ブースト</dd>
-          <dt>C / H</dt><dd>ブレーキ</dd>
-          <dt>Q / E</dt><dd>傾ける・2回押しでローリング</dd>
-          <dt>P / Esc</dt><dd>ポーズ　　M：サウンド</dd>
+          <dt>Space / クリック</dt><dd>ショット（押しっぱなしで連射）</dd>
+          <dt>E</dt><dd>ボム</dd>
+          <dt>Q</dt><dd>ローリング（敵の弾をはじく）</dd>
+          <dt>Shift</dt><dd>ブースト</dd>
+          <dt>Esc</dt><dd>ポーズ</dd>
         </dl>
         <dl class="keys only-touch">
-          <dt>左半分</dt><dd>ドラッグで移動</dd>
-          <dt>SHOT</dt><dd>ショット（長押しでロックオン）</dd>
-          <dt>BOMB</dt><dd>ボム（もう一度押すと起爆）</dd>
-          <dt>ROLL</dt><dd>ローリングで敵弾をはじく</dd>
-          <dt>BST / BRK</dt><dd>ブースト / ブレーキ</dd>
+          <dt>左のスティック</dt><dd>移動（画面の左半分ならどこでも）</dd>
+          <dt>ショット</dt><dd>押しっぱなしで連射</dd>
+          <dt>ボム</dt><dd>まわりの敵をまとめて倒す</dd>
+          <dt>ロール</dt><dd>敵の弾をはじく</dd>
         </dl>
+        <p class="tip">ショットを押し続けて離すと、ロックオン弾が敵を追いかけます。</p>
         <div class="opts">
           <label><input type="checkbox" id="invertY"> 上下反転（飛行機式）</label>
           <label><input type="checkbox" id="soundOn" checked> サウンド</label>
@@ -182,13 +186,11 @@ html,body{height:100%;margin:0;background:var(--void);color:var(--ink);overflow:
   </div>
 
   <div id="touch" hidden>
-    <div id="stickZone"><div id="stickBase" hidden><div id="stickKnob"></div></div></div>
+    <div id="stickZone"><div id="stickBase" class="idle"><div id="stickKnob"></div></div></div>
     <div id="tbtns">
-      <button class="tb" data-k="bomb" type="button">BOMB</button>
-      <button class="tb" data-k="roll" type="button">ROLL</button>
-      <button class="tb big" data-k="fire" type="button">SHOT</button>
-      <button class="tb" data-k="brake" type="button">BRK</button>
-      <button class="tb" data-k="boost" type="button">BST</button>
+      <button class="tb roll" data-k="roll" type="button" aria-label="ローリング"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v5h-5"/></svg>ロール</button>
+      <button class="tb bomb" data-k="bomb" type="button" aria-label="ボム"><svg viewBox="0 0 24 24"><path d="M12 2l2.2 6.2L20.5 6l-3.4 5.5L22 14l-6.3.6L16 21l-4-4.6L8 21l.3-6.4L2 14l4.9-2.5L3.5 6l6.3 2.2z"/></svg>ボム</button>
+      <button class="tb big" data-k="fire" type="button" aria-label="ショット"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><path d="M12 1v6M12 17v6M1 12h6M17 12h6"/></svg>ショット</button>
     </div>
     <button id="tpause" type="button" aria-label="ポーズ">II</button>
   </div>
@@ -751,7 +753,7 @@ let checkpoint=0, cpHits=0, touchMode=false, invertY=false, boss=null;
 let shake=0, fxRed=0, fxWhite=0;
 const CP_D=3870;
 const P={x:0,y:12,vx:0,vy:0,tilt:0,spinT:0,spinDir:1,shield:100,maxShield:100,invul:0,laser:0,bombs:3,gauge:1,boostLock:false,
-  speed:BASE_SPEED,hits:0,lives:2,gold:0,charge:0,fireHeld:0,lock:null,lastTL:-9,lastTR:-9,scrape:0,dieT:0,exploded:false,lowBeep:0,clearT:0,cz:0,lowWarned:false,spray:0};
+  speed:BASE_SPEED,hits:0,lives:2,gold:0,charge:0,fireHeld:0,lock:null,autoT:0,scrape:0,dieT:0,exploded:false,lowBeep:0,clearT:0,cz:0,lowWarned:false,spray:0};
 const ship=buildShip(CAST.hayate.ship); scene.add(ship);
 const ents=[];
 
@@ -1147,12 +1149,12 @@ function bossDamage(part,dmg,at){
 const EVENTS=[
   [0,()=>{ centerMsg('MISSION START','惑星ポチテラ防衛戦',3); wingmenFlyby(); radio('kotetsu','ニャルガ軍が惑星ポチテラに侵攻した。スタードッグス、迎撃に向かうぞ！'); }],
   [90,()=>radio('mimi','ハヤテ、あたしの足を引っぱらないでよね！')],
-  [170,()=>radio('kotetsu',touchMode?'SHOTで撃て。長押しするとロックオンのチャージショットだ！':'スペースで撃て。長押しするとロックオンのチャージショットだ！')],
+  [170,()=>radio('kotetsu',touchMode?'右の大きいボタンで撃て。押しっぱなしで連射、ためて離せばロックオン弾だ！':'スペースかクリックで撃て。押しっぱなしで連射、ためて離せばロックオン弾だ！')],
   [300,()=>wHeadOn(5,0,14)],
   [460,()=>ring('silver',0,12)],
   [600,()=>wSweep(5,1,15)],
   [760,()=>wSweep(5,-1,11)],
-  [860,()=>radio('kotetsu',touchMode?'ROLLでローリングだ！ 敵の弾をはじけるぞ！':'QかEを2回押すとローリングだ！ 敵の弾をはじけるぞ！')],
+  [860,()=>radio('kotetsu',touchMode?'ロールボタンでローリングだ！ 敵の弾をはじけるぞ！':'Qキーでローリングだ！ 敵の弾をはじけるぞ！')],
   [950,()=>wHover(4)],
   [1150,()=>radio('chip','前方に都市が見えるよ！ 屋上の砲台に気をつけて！')],
   [1250,()=>wTurrets(4)],
@@ -1281,47 +1283,59 @@ function updateBomb(dt){
 function barrelRoll(dir){ if(P.spinT>.12) return; P.spinT=ROLL_T; P.spinDir=dir; SFX.deflect(); }
 
 /* ================= input ================= */
-const keys=new Set();
-const GAME_KEYS=new Set(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyW','KeyA','KeyS','KeyD','KeyJ','KeyK','KeyB','KeyL','KeyH','KeyC','KeyQ','KeyE','ShiftLeft','ShiftRight']);
+const keys=new Set(), keyTaps=new Set();
+const GAME_KEYS=new Set(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyW','KeyA','KeyS','KeyD','KeyQ','KeyE','ShiftLeft','ShiftRight']);
 addEventListener('keydown',e=>{
   if(e.code==='KeyM'){ setSound(!soundOn); return; }
   if(e.code==='KeyP'||e.code==='Escape'){ if(state==='play'||state==='paused'){ togglePause(); e.preventDefault(); } return; }
   if(state==='play'&&GAME_KEYS.has(e.code)) e.preventDefault();
-  keys.add(e.code);
+  keys.add(e.code); keyTaps.add(e.code);
 });
 addEventListener('keyup',e=>keys.delete(e.code));
 addEventListener('blur',()=>{ keys.clear(); if(state==='play') togglePause(); });
 document.addEventListener('visibilitychange',()=>{ if(document.hidden&&state==='play') togglePause(); });
-const touch={x:0,y:0,fire:false,bomb:false,boost:false,brake:false,roll:false};
-let ctrl={x:0,y:0,fire:false,bomb:false,boost:false,brake:false,tl:false,tr:false,roll:false,pause:false}, pc=Object.assign({},ctrl);
+const touch={x:0,y:0,fire:false,bomb:false,roll:false}, touchTaps=new Set();
+let mouseFire=false;
+addEventListener('pointerdown',e=>{ if(e.pointerType==='mouse'&&e.button===0&&state==='play'&&!e.target.closest('button')){ mouseFire=true; touchTaps.add('fire'); } });
+addEventListener('pointerup',e=>{ if(e.pointerType==='mouse') mouseFire=false; });
+let ctrl={x:0,y:0,fire:false,bomb:false,boost:false,roll:false,pause:false}, pc=Object.assign({},ctrl);
 function readCtrl(){
-  pc=ctrl; const k=c=>keys.has(c);
+  pc=ctrl; const k=c=>keys.has(c)||keyTaps.has(c), t=n=>touch[n]||touchTaps.has(n);
   const o={x:(k('ArrowRight')||k('KeyD')?1:0)-(k('ArrowLeft')||k('KeyA')?1:0), y:(k('ArrowUp')||k('KeyW')?1:0)-(k('ArrowDown')||k('KeyS')?1:0),
-    fire:k('Space')||k('KeyJ'), bomb:k('KeyB')||k('KeyK'), boost:k('ShiftLeft')||k('ShiftRight')||k('KeyL'), brake:k('KeyC')||k('KeyH'),
-    tl:k('KeyQ'), tr:k('KeyE'), roll:touch.roll, pause:false};
-  o.x+=touch.x; o.y+=touch.y; o.fire=o.fire||touch.fire; o.bomb=o.bomb||touch.bomb; o.boost=o.boost||touch.boost; o.brake=o.brake||touch.brake;
+    fire:k('Space')||mouseFire||t('fire'), bomb:k('KeyE')||t('bomb'), boost:k('ShiftLeft')||k('ShiftRight'), roll:k('KeyQ')||t('roll'), pause:false};
+  keyTaps.clear(); touchTaps.clear();
+  o.x+=touch.x; o.y+=touch.y;
   try{ const pads=navigator.getGamepads?navigator.getGamepads():[];
     for(const g of pads){ if(!g) continue; const ax=g.axes[0]||0, ay=g.axes[1]||0, bt=i=>!!(g.buttons[i]&&g.buttons[i].pressed);
       if(Math.abs(ax)>.18) o.x+=ax; if(Math.abs(ay)>.18) o.y-=ay; if(bt(14)) o.x-=1; if(bt(15)) o.x+=1; if(bt(12)) o.y+=1; if(bt(13)) o.y-=1;
-      o.fire=o.fire||bt(0); o.bomb=o.bomb||bt(1)||bt(2); o.tl=o.tl||bt(4); o.tr=o.tr||bt(5); o.brake=o.brake||bt(6); o.boost=o.boost||bt(7); o.pause=bt(9); break; } }catch(e){}
+      o.fire=o.fire||bt(0)||bt(7); o.bomb=o.bomb||bt(1); o.roll=o.roll||bt(2)||bt(4)||bt(5); o.boost=o.boost||bt(6); o.pause=bt(9); break; } }catch(e){}
   o.x=clamp(o.x,-1,1); o.y=clamp(o.y,-1,1); ctrl=o;
   if(o.pause&&!pc.pause&&(state==='play'||state==='paused')) togglePause();
 }
 /* touch controls */
 const tUI=$('#touch'), stickZone=$('#stickZone'), stickBase=$('#stickBase'), stickKnob=$('#stickKnob');
-const stick={id:null,ox:0,oy:0};
-function enableTouch(){ if(touchMode) return; touchMode=true; if(state==='play') tUI.hidden=false; }
+const stick={id:null,ox:0,oy:0,cx:0,cy:0};
+function stickPlace(x,y){ stick.cx=x; stick.cy=y; stickBase.style.left=x+'px'; stickBase.style.top=y+'px'; }
+function stickHome(){ const r=stickZone.getBoundingClientRect(), s=stickBase.offsetWidth||140; stickPlace(s/2+32,r.height-s/2-28);
+  stickBase.classList.add('idle'); stickKnob.style.transform=''; }
+function stickMove(e){
+  const R=stickBase.offsetWidth*.36; let dx=e.clientX-stick.ox, dy=e.clientY-stick.oy; const l=Math.hypot(dx,dy);
+  if(l>R){ const k=(l-R)/l; stick.ox+=dx*k; stick.oy+=dy*k; stickPlace(stick.cx+dx*k,stick.cy+dy*k); dx-=dx*k; dy-=dy*k; } // the base follows the finger
+  touch.x=dx/R; touch.y=-dy/R; stickKnob.style.transform=`translate(${dx}px,${dy}px)`;
+}
+function showTouch(on){ tUI.hidden=!on; if(on) requestAnimationFrame(stickHome); else { touch.x=touch.y=0; touch.fire=touch.bomb=touch.roll=false; stick.id=null; document.querySelectorAll('.tb.on').forEach(b=>b.classList.remove('on')); } }
+function enableTouch(){ if(touchMode) return; touchMode=true; if(state==='play') showTouch(true); }
 addEventListener('pointerdown',e=>{ if(e.pointerType==='touch') enableTouch(); },{capture:true});
 if(matchMedia('(pointer:coarse)').matches) touchMode=true;
-stickZone.addEventListener('pointerdown',e=>{ e.preventDefault(); stick.id=e.pointerId; stick.ox=e.clientX; stick.oy=e.clientY; try{ stickZone.setPointerCapture(e.pointerId); }catch(_){}
-  stickBase.hidden=false; stickBase.style.left=e.clientX+'px'; stickBase.style.top=e.clientY+'px'; stickKnob.style.transform=''; });
-stickZone.addEventListener('pointermove',e=>{ if(e.pointerId!==stick.id) return; let dx=(e.clientX-stick.ox)/55, dy=(e.clientY-stick.oy)/55; const l=Math.hypot(dx,dy); if(l>1){ dx/=l; dy/=l; }
-  touch.x=dx; touch.y=-dy; stickKnob.style.transform=`translate(${dx*40}px,${dy*40}px)`; });
-const stickEnd=e=>{ if(e.pointerId!==stick.id) return; stick.id=null; touch.x=touch.y=0; stickBase.hidden=true; };
+stickZone.addEventListener('pointerdown',e=>{ e.preventDefault(); if(stick.id!=null) return; stick.id=e.pointerId; try{ stickZone.setPointerCapture(e.pointerId); }catch(_){}
+  const r=stickZone.getBoundingClientRect(); stick.ox=e.clientX; stick.oy=e.clientY; stickPlace(e.clientX-r.left,e.clientY-r.top); stickBase.classList.remove('idle'); stickKnob.style.transform=''; });
+stickZone.addEventListener('pointermove',e=>{ if(e.pointerId===stick.id) stickMove(e); });
+const stickEnd=e=>{ if(e.pointerId!==stick.id) return; stick.id=null; touch.x=touch.y=0; stickHome(); };
 stickZone.addEventListener('pointerup',stickEnd); stickZone.addEventListener('pointercancel',stickEnd);
+addEventListener('resize',()=>{ if(stick.id==null&&!tUI.hidden) stickHome(); });
 for(const b of document.querySelectorAll('.tb')){
   const k=b.dataset.k;
-  const on=e=>{ e.preventDefault(); touch[k]=true; b.classList.add('on'); try{ b.setPointerCapture(e.pointerId); }catch(_){} };
+  const on=e=>{ e.preventDefault(); touch[k]=true; touchTaps.add(k); b.classList.add('on'); try{ b.setPointerCapture(e.pointerId); }catch(_){} };
   const off=()=>{ touch[k]=false; b.classList.remove('on'); };
   b.addEventListener('pointerdown',on); b.addEventListener('pointerup',off); b.addEventListener('pointercancel',off); b.addEventListener('lostpointercapture',off);
 }
@@ -1348,22 +1362,22 @@ function resetWorld(d){
 function newGame(){
   audioInit(); Object.assign(P,{lives:2,hits:0,laser:0,bombs:3,gold:0,maxShield:100}); checkpoint=0; cpHits=0;
   state='play'; resetWorld(0); setSong('stage');
-  $('#title').hidden=true; $('#result').hidden=true; $('#pause').hidden=true; tUI.hidden=!touchMode;
+  $('#title').hidden=true; $('#result').hidden=true; $('#pause').hidden=true; showTouch(touchMode);
   if(document.activeElement&&document.activeElement.blur) document.activeElement.blur();
 }
-function startDying(){ state='dying'; P.dieT=0; P.exploded=false; setSong(null); P.charge=0; P.lock=null; tUI.hidden=true; radio('kotetsu','ハヤテェーッ！'); }
+function startDying(){ state='dying'; P.dieT=0; P.exploded=false; setSong(null); P.charge=0; P.lock=null; showTouch(false); radio('kotetsu','ハヤテェーッ！'); }
 function updateDying(dt){
   P.dieT+=dt;
   if(!P.exploded){ P.y-=(6+P.dieT*16)*dt; ship.rotation.z+=dt*9; ship.rotation.x-=dt*.5; ship.position.set(P.x,Math.max(P.y,.6),railZ); if(Math.random()<dt*30) smoke(ship.position,.8,_v2.set(0,0,-P.speed)); if(Math.random()<dt*20) fxFlash(ship.position,3,C_FIRE,.25,_v2);
     if(P.y<=.6||P.dieT>1.7){ P.exploded=true; ship.visible=false; explode(ship.position,2.6); SFX.boomBig(); shake=.8; } }
   if(P.dieT>3.8){
     if(P.lives>0){ P.lives--; P.laser=0; P.bombs=Math.max(P.bombs,3); P.hits=cpHits; state='play'; resetWorld(checkpoint); setSong('stage');
-      centerMsg('READY','残り '+P.lives+' 機',2.4); tUI.hidden=!touchMode; }
+      centerMsg('READY','残り '+P.lives+' 機',2.4); showTouch(touchMode); }
     else gameOver();
   }
 }
 function gameOver(){ state='result'; jingle([['E5',4],['D5',4],['C5',4],['B4',4],['A4',12]],100); showResult(false); }
-function startClear(){ state='clear'; P.clearT=0; P.cz=0; P.charge=0; P.lock=null; tUI.hidden=true; clearCamZ=camera.position.z;
+function startClear(){ state='clear'; P.clearT=0; P.cz=0; P.charge=0; P.lock=null; showTouch(false); clearCamZ=camera.position.z;
   jingle([['C5',2],['E5',2],['G5',2],['C6',6],['A5',2],['B5',2],['C6',8]],140); centerMsg('MISSION COMPLETE','',4.5);
   radio('kotetsu','よくやった、ハヤテ！'); radio('mimi','ま、あたしの援護のおかげね。'); radio('chip','ニャルガ軍が撤退していくよ！ 惑星ポチテラは守られたんだ！'); }
 let clearCamZ=0;
@@ -1383,14 +1397,14 @@ function showResult(win){
   $('#resHits').textContent=h; $('#resRank').textContent=win?rankOf(h):'—'; $('#resBest').textContent=best;
   $('#resNote').textContent=win?(h>=100?'撃墜100機以上で勲章を獲得。'+(isBest?'自己ベスト更新！':''):(isBest?'自己ベスト更新！ ':'')+'撃墜100機以上で勲章がもらえます。')
     :'ニャルガ軍の侵攻を止められなかった……。もう一度挑戦しよう。';
-  tUI.hidden=true; $('#result').hidden=false; setTimeout(()=>$('#retryBtn').focus(),50);
+  showTouch(false); $('#result').hidden=false; setTimeout(()=>$('#retryBtn').focus(),50);
 }
 function togglePause(){
   if(state==='play'){ state='paused'; $('#pause').hidden=false; musVol(0); keys.clear(); setTimeout(()=>$('#resumeBtn').focus(),30); }
   else if(state==='paused'){ state='play'; $('#pause').hidden=true; musVol(.32); last=performance.now(); }
 }
 function toTitle(){ state='title'; setSong(null); musVol(.32); clearWorld(); railZ=0; dist=0; nextScen=0; P.x=0; P.y=13; camera.position.set(0,16,20); sceneryTick(); updateTerrain(true); ship.visible=true;
-  $('#pause').hidden=true; $('#result').hidden=true; $('#title').hidden=false; tUI.hidden=true; }
+  $('#pause').hidden=true; $('#result').hidden=true; $('#title').hidden=false; showTouch(false); }
 $('#startBtn').addEventListener('click',newGame);
 $('#retryBtn').addEventListener('click',newGame);
 $('#restartBtn').addEventListener('click',()=>{ musVol(.32); newGame(); });
@@ -1405,21 +1419,15 @@ function updateSpeed(dt){
   let target=BASE_SPEED;
   if(boss){ P.gauge+=dt*.35; }
   else if(ctrl.boost&&!P.boostLock){ target=BOOST_SPEED; P.gauge-=dt*.75; }
-  else if(ctrl.brake&&!P.boostLock){ target=BRAKE_SPEED; P.gauge-=dt*.75; }
   else P.gauge+=dt*(P.boostLock?.45:.35);
   if(P.gauge<=0){ P.gauge=0; P.boostLock=true; } if(P.gauge>=1){ P.gauge=1; P.boostLock=false; }
   P.speed=damp(P.speed,target,3,dt); return P.speed;
 }
 function updatePlayer(dt){
   const c=ctrl;
-  if(c.tl&&!pc.tl){ if(T-P.lastTL<.3) barrelRoll(1); P.lastTL=T; }
-  if(c.tr&&!pc.tr){ if(T-P.lastTR<.3) barrelRoll(-1); P.lastTR=T; }
   if(c.roll&&!pc.roll) barrelRoll(c.x<-.2?1:-1);
-  const tiltT=(c.tl?1:0)-(c.tr?1:0);
-  P.tilt=damp(P.tilt,tiltT*1.45,10,dt);
-  const sharp=(tiltT>0&&c.x<0)||(tiltT<0&&c.x>0);
   const iy=c.y*(invertY?-1:1);
-  P.vx=damp(P.vx,c.x*(sharp?44:30),5,dt); P.vy=damp(P.vy,iy*26,5,dt);
+  P.vx=damp(P.vx,c.x*32,5,dt); P.vy=damp(P.vy,iy*27,5,dt);
   P.x+=P.vx*dt; P.y+=P.vy*dt;
   if(P.x<-XL){ P.x=-XL; if(P.vx<0) P.vx=0; } if(P.x>XL){ P.x=XL; if(P.vx>0) P.vx=0; }
   if(P.y>YMAX){ P.y=YMAX; if(P.vy>0) P.vy=0; }
@@ -1431,8 +1439,10 @@ function updatePlayer(dt){
   ship.position.set(P.x,P.y,railZ);
   P.invul-=dt; ship.visible=P.invul<=0||((T*18)|0)%2===0;
   // weapons
-  if(c.fire&&!pc.fire){ fireLaser(); P.fireHeld=0; }
-  if(c.fire){ P.fireHeld+=dt; if(P.fireHeld>.32){ const was=P.charge; P.charge=Math.min(1,(P.fireHeld-.32)/.55); if(was<1&&P.charge>=1) SFX.charged(); } }
+  // one button: tap = shot, hold = rapid fire while a lock-on charge builds, release when full = homing shot
+  if(c.fire&&!pc.fire){ fireLaser(); P.fireHeld=0; P.autoT=.18; }
+  if(c.fire){ P.fireHeld+=dt; P.autoT-=dt; if(P.autoT<=0){ fireLaser(); P.autoT=.14; }
+    if(P.fireHeld>.4){ const was=P.charge; P.charge=Math.min(1,(P.fireHeld-.4)/.8); if(was<1&&P.charge>=1) SFX.charged(); } }
   else if(pc.fire){ if(P.charge>=1) fireCharge(); P.charge=0; P.lock=null; }
   if(c.bomb&&!pc.bomb) launchBomb();
   if(P.charge>=1){
@@ -1572,7 +1582,7 @@ function drawHUD(){
   if(fxWhite>0){ c.fillStyle=`rgba(255,250,235,${fxWhite*.55})`; c.fillRect(0,0,W,H); }
   if(fxRed>0){ const g=c.createRadialGradient(W/2,H/2,Math.min(W,H)*.3,W/2,H/2,Math.max(W,H)*.75); g.addColorStop(0,'rgba(255,40,70,0)'); g.addColorStop(1,`rgba(255,40,70,${fxRed*.55})`); c.fillStyle=g; c.fillRect(0,0,W,H); }
   if(state==='title'||state==='result') return;
-  const narrow=W<720;
+  const narrow=W<720||touchMode;
   if(state==='play') drawReticle(c);
   for(const p of popups){ const k=p.t/.9; c.globalAlpha=1-k*k; txt(c,p.text,p.x,p.y-26*k,F_HUD(15),p.color,'center'); } c.globalAlpha=1;
   // hits & lives
@@ -1591,8 +1601,8 @@ function drawHUD(){
   const rx=W-16, ry=narrow?top+14:H-58;
   txt(c,'BOMB',rx,ry,F_HUD(12),'#a6b8dc','right');
   for(let i=0;i<Math.min(9,P.bombs);i++){ const x=rx-48-i*15, y=ry-5; c.fillStyle='#ff6a4d'; c.beginPath(); c.moveTo(x,y-6); c.lineTo(x+5,y); c.lineTo(x,y+6); c.lineTo(x-5,y); c.closePath(); c.fill(); c.strokeStyle='rgba(5,8,24,.8)'; c.lineWidth=1.5; c.stroke(); }
-  txt(c,'BOOST',rx,ry+24,F_HUD(12),'#a6b8dc','right');
-  const bw=narrow?92:120; bar(c,rx-58-bw,ry+14,bw,9,P.gauge,P.boostLock?(((T*5)|0)%2?'#6c7488':'#3d4456'):'#ff8a1f');
+  if(!touchMode){ txt(c,'BOOST',rx,ry+24,F_HUD(12),'#a6b8dc','right');
+  const bw=narrow?92:120; bar(c,rx-58-bw,ry+14,bw,9,P.gauge,P.boostLock?(((T*5)|0)%2?'#6c7488':'#3d4456'):'#ff8a1f'); }
   // boss bar
   if(boss&&boss.phase!=='enter'&&!boss.dead){ const w=narrow?150:220, bx=narrow?rx-w:W-16-w, by=narrow?top+64:top+30;
     txt(c,'ENEMY  機動要塞ネコマタ',bx+w,by-6,F_HUD(12),'#ff9ab8','right'); bar(c,bx,by,w,10,boss.hpRatio(),'#ff3b72'); }
