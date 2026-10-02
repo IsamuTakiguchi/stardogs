@@ -2,7 +2,7 @@
   "name": "stardogs",
   "version": "1.0.0",
   "private": true,
-  "description": "STAR DOGS — browser 3D rail shooter (PWA)",
+  "description": "STAR DOGS — browser 3D rail shooter (PWA). npm start serves public/ locally.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

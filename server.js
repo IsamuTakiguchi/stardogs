@@ -1,4 +1,4 @@
-// Minimal static server for Railway: serves ./public with sensible caching. No dependencies.
+// Minimal static server for local play: serves ./public with sensible caching. No dependencies.
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');

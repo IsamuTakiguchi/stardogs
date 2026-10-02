@@ -25,26 +25,17 @@ https で配信したページを開き、ホーム画面に追加するとア�
 
 一度開けばオフラインでも起動する（three.js は `public/vendor/` に同梱。フォントのみ Google Fonts から取得し、取れないときは端末のフォントで表示）。
 
-## Railway へのデプロイ
+## 公開（GitHub Actions → GitHub Pages）
 
-`server.js`（依存なしの静的サーバー）と `railway.json`（起動コマンド・ヘルスチェック `/healthz`）を同梱済み。
+`main` ブランチに push すると `.github/workflows/pages.yml` が `public/` を GitHub Pages に公開する（Actions タブから手動実行も可）。
+公開URL：https://isamutakiguchi.github.io/stardogs/
 
-1. Railway で New Project → Deploy from GitHub repo → このリポジトリを選ぶ
-2. サービスの Settings → Source で、デプロイするブランチを選ぶ
-3. Settings → Networking → Generate Domain で公開URLを発行する
+初回だけ必要な設定：
 
-`PORT` は Railway が自動で渡す。ビルド設定や環境変数の追加は不要。
+1. リポジトリの Settings → Pages → Build and deployment の Source を「GitHub Actions」にする
+2. 非公開（private）リポジトリのままで Pages を使うには GitHub Pro 以上のプランが必要。無料プランの場合はリポジトリを公開（public）にする
 
-| 操作 | キーボード | ゲームパッド |
-| --- | --- | --- |
-| 移動 | WASD / 矢印 | 左スティック / 十字キー |
-| ショット（長押しでロックオン・チャージ） | Space / J | A |
-| ボム（もう一度押すと起爆） | B / K | B / X |
-| ブースト / ブレーキ | Shift・L / C・H | RT / LT |
-| 傾ける・2回押しでローリング | Q / E | LB / RB |
-| ポーズ / サウンド | P・Esc / M | START |
-
-スマートフォンでは画面左半分のドラッグで移動、右下のボタンで攻撃します。
+デプロイごとにサービスワーカーのキャッシュ名が更新されるので、インストール済みのアプリも次回起動時に新しい版へ切り替わる。
 
 ## ステージ構成
 
