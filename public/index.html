@@ -1,17 +1,24 @@
 <!doctype html>
 <html lang="ja">
+<head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>STAR DOGS</title>
+<!-- home-screen icons: iPhone 180, iPad 167/152, browsers 32/192; ?v busts icons cached from an earlier add -->
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png?v=2">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png?v=2">
+<link rel="apple-touch-icon" sizes="167x167" href="icons/apple-touch-icon-167.png?v=2">
+<link rel="apple-touch-icon" sizes="152x152" href="icons/apple-touch-icon-152.png?v=2">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png?v=2">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png?v=2">
+<link rel="manifest" href="manifest.webmanifest?v=2">
 <meta name="description" content="犬の遊撃隊スタードッグスがニャルガ帝国から惑星ポチテラを守る3Dレールシューティング">
 <meta name="theme-color" content="#070a1c">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="STAR DOGS">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icons/icon-192.png" type="image/png">
-<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="application-name" content="STAR DOGS">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=M+PLUS+1p:wght@500;700&family=Russo+One&display=swap">
@@ -114,6 +121,8 @@ html,body{height:100%;margin:0;background:var(--void);color:var(--ink);overflow:
 }
 @media (prefers-reduced-motion:reduce){.btn{transition:none}}
 </style>
+</head>
+<body>
 
 <div id="game">
   <canvas id="gl"></canvas>
@@ -1688,3 +1697,5 @@ if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){
   catch(e){ console.error(e); }
 })();
 </script>
+</body>
+</html>
