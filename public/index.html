@@ -1,6 +1,17 @@
+<!doctype html>
+<html lang="ja">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>STAR DOGS</title>
+<meta name="description" content="犬の遊撃隊スタードッグスがニャルガ帝国から惑星ポチテラを守る3Dレールシューティング">
+<meta name="theme-color" content="#070a1c">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="STAR DOGS">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;700&family=M+PLUS+1p:wght@500;700&family=Russo+One&display=swap">
@@ -183,13 +194,13 @@ html,body{height:100%;margin:0;background:var(--void);color:var(--ink);overflow:
   </div>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="vendor/three.min.js"></script>
+<script src="vendor/CopyShader.js"></script>
+<script src="vendor/LuminosityHighPassShader.js"></script>
+<script src="vendor/EffectComposer.js"></script>
+<script src="vendor/RenderPass.js"></script>
+<script src="vendor/ShaderPass.js"></script>
+<script src="vendor/UnrealBloomPass.js"></script>
 <script>
 function STARDOGS(saved){
 'use strict';
@@ -1657,6 +1668,9 @@ toTitle();
 requestAnimationFrame(frame);
 window.__stardogs={get state(){return state;},P,get dist(){return dist;},get boss(){return boss;},ents,
   warp(d){ resetWorld(d); },newGame,EVENTS,dbg:{addFighter,addMine,addTurret,addRing,explode,killEnemy}};
+}
+if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){
+  addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(e=>console.warn('service worker',e)); });
 }
 (function(){
   const start=data=>STARDOGS(data||{});

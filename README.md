@@ -12,7 +12,28 @@
 
 ## 遊び方
 
-`index.html` をブラウザで開くだけ（three.js は CDN から読み込み）。
+- ローカル：`npm start` → http://localhost:3000 （Node.js 18以上。依存パッケージなし）
+- `public/index.html` を直接ブラウザで開いても遊べる（オフライン機能は http(s) で配信したときのみ有効）
+
+## アプリとして使う（PWA）
+
+https で配信したページを開き、ホーム画面に追加するとアプリとして全画面で起動する。
+
+- iPhone / iPad（Safari）：共有ボタン →「ホーム画面に追加」
+- Android（Chrome）：メニュー →「アプリをインストール」
+- PC（Chrome / Edge）：アドレスバー右端のインストールボタン
+
+一度開けばオフラインでも起動する（three.js は `public/vendor/` に同梱。フォントのみ Google Fonts から取得し、取れないときは端末のフォントで表示）。
+
+## Railway へのデプロイ
+
+`server.js`（依存なしの静的サーバー）と `railway.json`（起動コマンド・ヘルスチェック `/healthz`）を同梱済み。
+
+1. Railway で New Project → Deploy from GitHub repo → このリポジトリを選ぶ
+2. サービスの Settings → Source で、デプロイするブランチを選ぶ
+3. Settings → Networking → Generate Domain で公開URLを発行する
+
+`PORT` は Railway が自動で渡す。ビルド設定や環境変数の追加は不要。
 
 | 操作 | キーボード | ゲームパッド |
 | --- | --- | --- |

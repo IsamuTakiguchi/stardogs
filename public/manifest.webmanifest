@@ -1,0 +1,20 @@
+{
+  "name": "STAR DOGS",
+  "short_name": "STAR DOGS",
+  "description": "犬の遊撃隊スタードッグスがニャルガ帝国から惑星ポチテラを守る3Dレールシューティング",
+  "lang": "ja",
+  "start_url": "./",
+  "scope": "./",
+  "id": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "orientation": "any",
+  "background_color": "#070a1c",
+  "theme_color": "#070a1c",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
