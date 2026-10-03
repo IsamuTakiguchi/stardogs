@@ -25,7 +25,7 @@ jobs:
 
       - name: Check the site files
         run: |
-          for f in index.html manifest.webmanifest sw.js vendor/three.min.js icons/icon-192.png icons/icon-512.png; do
+          for f in index.html manifest.webmanifest sw.js vendor/three.min.js icons/icon-192.png icons/icon-512.png icons/icon-maskable-192.png icons/icon-maskable-512.png icons/apple-touch-icon.png icons/apple-touch-icon-167.png icons/apple-touch-icon-152.png icons/favicon-32.png; do
             test -f "public/$f" || { echo "missing public/$f"; exit 1; }
           done
           node --check public/sw.js

@@ -3,7 +3,7 @@ const VERSION = 'stardogs-v1';
 const SHELL = [
   './',
   'index.html',
-  'manifest.webmanifest',
+  'manifest.webmanifest?v=2',
   'vendor/three.min.js',
   'vendor/CopyShader.js',
   'vendor/LuminosityHighPassShader.js',
@@ -11,9 +11,14 @@ const SHELL = [
   'vendor/RenderPass.js',
   'vendor/ShaderPass.js',
   'vendor/UnrealBloomPass.js',
-  'icons/icon-192.png',
-  'icons/icon-512.png',
-  'icons/apple-touch-icon.png',
+  'icons/icon-192.png?v=2',
+  'icons/icon-512.png?v=2',
+  'icons/icon-maskable-192.png?v=2',
+  'icons/icon-maskable-512.png?v=2',
+  'icons/apple-touch-icon.png?v=2',
+  'icons/apple-touch-icon-167.png?v=2',
+  'icons/apple-touch-icon-152.png?v=2',
+  'icons/favicon-32.png?v=2',
 ];
 const FONT_HOSTS = ['fonts.googleapis.com', 'fonts.gstatic.com'];
 
