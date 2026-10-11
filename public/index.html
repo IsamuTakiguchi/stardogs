@@ -2022,7 +2022,7 @@ function beginStage(){
 function startDying(){ state='dying'; P.dieT=0; P.exploded=false; setSong(null); P.charge=0; P.lock=null; showTouch(false); radio('kotetsu','ハヤテェーッ！'); }
 function updateDying(dt){
   P.dieT+=dt;
-  if(!P.exploded){ P.y-=(6+P.dieT*16)*dt; ship.rotation.z+=dt*9; ship.rotation.x-=dt*.5; ship.position.set(P.x,Math.max(P.y,.6),railZ); if(Math.random()<dt*30) smoke(ship.position,.8,_v2.set(0,0,-P.speed)); if(Math.random()<dt*20) fxFlash(ship.position,3,C_FIRE,.25,_v2);
+  if(!P.exploded){ P.y-=(6+P.dieT*16)*dt; ship.rotation.z+=dt*9; ship.rotation.x-=dt*.5; ship.position.set(P.x,envName==='planet'?Math.max(P.y,.6):P.y,railZ); if(Math.random()<dt*30) smoke(ship.position,.8,_v2.set(0,0,-P.speed)); if(Math.random()<dt*20) fxFlash(ship.position,3,C_FIRE,.25,_v2);
     if((envName==='planet'&&P.y<=.6)||P.dieT>1.7){ P.exploded=true; ship.visible=false; explode(ship.position,2.6); SFX.boomBig(); shake=.8; } }
   if(P.dieT>3.8){
     if(P.lives>0){ P.lives--; P.laser=0; P.bombs=Math.max(P.bombs,3); P.hits=cpHits; state='play'; resetWorld(checkpoint); setSong(STG.music);
