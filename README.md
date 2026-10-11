@@ -25,13 +25,15 @@ BGMはすべてオリジナル曲で、録音データを使わずブラウザ�
 
 ## ボイス
 
-無線のセリフ（コテツ隊長・ミミ・チップ・ゲルニャ司令、全62本）はキャラクターごとの声で読み上げる。声が流れている間はBGMを少し下げ、顔グラフィックの口が声に合わせて動く。タイトルの「ボイス」のチェックを外すと声だけ消せる。
+無線のセリフ（コテツ隊長・ミミ・チップ・ゲルニャ司令、全62本）はキャラクターごとの声で読み上げる。戦闘中らしく、命令は怒気を込めて、警告は驚いて、喜ぶ場面は明るく、悲鳴はおびえた声で喋る。声が流れている間はBGMを少し下げ、顔グラフィックの口が声に合わせて動く。タイトルの「ボイス」のチェックを外すと声だけ消せる。
 
-- 声は音声合成モデル [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M)（Apache-2.0）で事前に作った音声ファイル（`public/voice/`、計約1.3MB）。端末の読み上げ機能は使わないので、どの端末でも同じ声になる
+- 声は感情を指定できる音声合成 [Style-Bert-VITS2](https://github.com/litagin02/Style-Bert-VITS2) と JVNV コーパスのモデル（[litagin/style_bert_vits2_jvnv](https://huggingface.co/litagin/style_bert_vits2_jvnv)）で事前に作った音声ファイル（`public/voice/`）。端末の読み上げ機能は使わないので、どの端末でも同じ声になる
+- 音声ファイルのライセンス：モデル（JVNV コーパス由来）に合わせて [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/deed.ja)。JVNV: Xin, D., Jiang, J., Takamichi, S., Saito, Y., Aizawa, A., & Saruwatari, H. (2023)
 - セリフを追加・変更したら `tools/voice/` のスクリプトで作り直す：
   1. `python tools/voice/extract_lines.py lines.json`（ゲーム内のセリフを抜き出す）
-  2. `python tools/voice/gen_voice.py lines.json`（足りない音声だけ作る。キャラの声質と読み方の補正はスクリプト冒頭の `CAST` と `SAY`）
-  - 必要なもの：Python 3.10以上、`pip install torch kokoro "misaki[ja]" soundfile`、`python -m unidic download`、ffmpeg（rubberband 対応）
+  2. `SBV_MODELS=<jvnv-*-jp を置いたフォルダ> python tools/voice/gen_voice.py lines.json --pick`（足りない音声だけ作る。`--pick` は感情の強さを変えた3テイクから音声認識で一番はっきり聞き取れるものを選ぶ）
+  - キャラの声質は `CAST`、セリフごとの感情は `MOOD`、読み方の補正は `SAY`（スクリプト冒頭）
+  - 必要なもの：Python 3.10以上、`pip install torch style-bert-vits2 "numpy<2" soundfile faster-whisper pykakasi`、ffmpeg（rubberband 対応）
 
 ## 遊び方
 
