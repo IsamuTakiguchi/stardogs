@@ -73,7 +73,7 @@ def main():
             sr, a = models[c['model']].infer(text=SAY.get(text, text), style=style, style_weight=weight, sdp_ratio=0.4, noise=0.6,
                                              length=c['length'], pitch_scale=c['pitch'], intonation_scale=c['inton'], line_split=False)
             sf.write(TMP, a, sr)
-            subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', TMP, '-af', af, '-ar', '24000', '-ac', '1', '-b:a', '48k', dst], check=True)
+            subprocess.run(['ffmpeg', '-nostdin', '-y', '-loglevel', 'error', '-i', TMP, '-af', af, '-ar', '24000', '-ac', '1', '-b:a', '48k', dst], check=True)
         if pick:
             takes = []
             for k, f in enumerate([1.0, 0.7, 0.45]):
