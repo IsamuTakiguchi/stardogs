@@ -24,16 +24,16 @@ CAST = {
 }
 # per-line emotion: (regex on the line, style, weight); first match wins, else the character's default
 MOOD = {
-  'kotetsu': [(r'よくやった|見事だ', 'Happy', 3.0), (r'ハヤテェ|大丈夫か', 'Fear', 3.5), (r'後ろだ', 'Surprise', 4.0)],
-  'geruna':  [(r'ニャんだと|ばんざ', 'Surprise', 5.0)],
+  'kotetsu': [(r'よくやった|見事だ', 'Happy', 3.0), (r'ハヤテェ', 'Angry', 3.0), (r'大丈夫か', 'Fear', 3.5), (r'後ろだ', 'Surprise', 4.0)],
+  'geruna':  [(r'ばんざ', 'Angry', 4.0), (r'ニャんだと', 'Surprise', 5.0)],
   'mimi':    [(r'きゃあ', 'Fear', 4.0), (r'ありがと', 'Happy', 2.0), (r'おかげね|燃えてきた', 'Happy', 3.5), (r'後ろにつかれた', 'Fear', 3.0)],
-  'chip':    [(r'パワーアップ|レーザー|リング3つ|守られた|撤退|逃げていく|ありがとう|お礼に|こわしておくと楽', 'Happy', 4.0),
+  'chip':    [(r'ハイパーレーザー', 'Surprise', 2.5), (r'パワーアップ|レーザー|リング3つ|守られた|撤退|逃げていく|ありがとう|お礼に|こわしておくと楽', 'Happy', 4.0),
               (r'もうダメ|うわーっ|撃たないで', 'Fear', 4.0)],
 }
 # pronunciation fixes: text shown on screen -> text spoken
 SAY = {
-  'ハヤテェーッ！': 'ハヤテーーッ！',
-  'ニャ……ニャルガ帝国、ばんざぁぁい……！': 'ニャ、ニャルガ帝国、ばんざーーい！',
+  'ハヤテ！ ハヤテェーッ！': 'ハヤテ、ハヤテーーッ！',
+  'ニャ……ニャルガ帝国、ばんざぁぁい……！': 'ニャルガ帝国、ばんざーい！',
   'ニャ、ニャんだとぉぉ……！ 覚えておれ！': 'ニャ、ニャんだとー！ 覚えておれ！',
   'Qキーでローリングだ！ 敵の弾をはじけるぞ！': 'キューキーでローリングだ！ 敵の弾をはじけるぞ！',
 }
@@ -73,7 +73,12 @@ def main():
             sr, a = models[c['model']].infer(text=SAY.get(text, text), style=style, style_weight=weight, sdp_ratio=0.4, noise=0.6,
                                              length=c['length'], pitch_scale=c['pitch'], intonation_scale=c['inton'], line_split=False)
             sf.write(TMP, a, sr)
-            subprocess.run(['ffmpeg', '-nostdin', '-y', '-loglevel', 'error', '-i', TMP, '-af', af, '-ar', '24000', '-ac', '1', '-b:a', '48k', dst], check=True)
+            for attempt in range(3):  # ffmpeg occasionally stalls when forked from the busy torch process
+                try:
+                    subprocess.run(['ffmpeg', '-nostdin', '-y', '-loglevel', 'error', '-i', TMP, '-af', af, '-ar', '24000', '-ac', '1', '-b:a', '48k', dst],
+                                   check=True, timeout=60, stdin=subprocess.DEVNULL); return
+                except subprocess.TimeoutExpired: pass
+            raise RuntimeError('ffmpeg kept stalling on ' + dst)
         if pick:
             takes = []
             for k, f in enumerate([1.0, 0.7, 0.45]):
@@ -87,6 +92,7 @@ def main():
         dur = float(subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', f'{OUT}/{vid}.mp3'],
                                    capture_output=True, text=True).stdout)
         idx[vid] = round(dur, 2); print(vid, style, w, round(dur, 2), text, flush=True)
+        json.dump(dict(sorted(idx.items())), open(OUT + '/index.json', 'w'), separators=(',', ':'))
     if os.path.exists(TMP): os.remove(TMP)
     json.dump(dict(sorted(idx.items())), open(OUT + '/index.json', 'w'), separators=(',', ':'))
 

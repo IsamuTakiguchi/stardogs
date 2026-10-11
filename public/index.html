@@ -1957,7 +1957,7 @@ function collectRing(e){
 }
 function collectItem(kind,pos){
   SFX.item(); fxFlash(pos,9,'#ffffff',.35);
-  if(kind==='laser'){ P.laser=Math.min(2,P.laser+1); popup(pos,P.laser>=2?'HYPER LASER':'TWIN LASER','#6dff94'); radio('chip',P.laser>=2?'ハイパーレーザーにパワーアップ！':'ツインレーザーだ！ 撃てる数が倍になったよ！'); }
+  if(kind==='laser'){ P.laser=Math.min(2,P.laser+1); popup(pos,P.laser>=2?'HYPER LASER':'TWIN LASER','#6dff94'); radio('chip',P.laser>=2?'ハイパーレーザーにパワーアップしたよ！':'ツインレーザーだ！ 撃てる数が倍になったよ！'); }
   else if(kind==='bomb'){ P.bombs=Math.min(9,P.bombs+1); popup(pos,'BOMB +1','#ff8a6a'); }
   else { P.shield=Math.min(P.maxShield,P.shield+40); popup(pos,'SHIELD +40','#bfe9ff'); }
 }
@@ -2128,7 +2128,7 @@ function beginStage(){
   $('#title').hidden=true; $('#result').hidden=true; $('#pause').hidden=true; $('#select').hidden=true; showTouch(touchMode);
   if(document.activeElement&&document.activeElement.blur) document.activeElement.blur();
 }
-function startDying(){ state='dying'; P.dieT=0; P.exploded=false; setSong(null); P.charge=0; P.lock=null; showTouch(false); radio('kotetsu','ハヤテェーッ！'); }
+function startDying(){ state='dying'; P.dieT=0; P.exploded=false; setSong(null); P.charge=0; P.lock=null; showTouch(false); radio('kotetsu','ハヤテ！ ハヤテェーッ！'); }
 function updateDying(dt){
   P.dieT+=dt;
   if(!P.exploded){ P.y-=(6+P.dieT*16)*dt; ship.rotation.z+=dt*9; ship.rotation.x-=dt*.5; ship.position.set(P.x,envName==='planet'?Math.max(P.y,.6):P.y,railZ); if(Math.random()<dt*30) smoke(ship.position,.8,_v2.set(0,0,-P.speed)); if(Math.random()<dt*20) fxFlash(ship.position,3,C_FIRE,.25,_v2);
