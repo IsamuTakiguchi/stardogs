@@ -23,6 +23,16 @@ BGMはすべてオリジナル曲で、録音データを使わずブラウザ�
 - クリア／ゲームオーバーのジングル
 - 音源：デチューンした金管、ストリングス、歪ませたベース、アルペジオ、ティンパニ、ロックドラム。ホール残響とコンプレッサーを通して鳴らす
 
+## ボイス
+
+無線のセリフ（コテツ隊長・ミミ・チップ・ゲルニャ司令、全62本）はキャラクターごとの声で読み上げる。声が流れている間はBGMを少し下げ、顔グラフィックの口が声に合わせて動く。タイトルの「ボイス」のチェックを外すと声だけ消せる。
+
+- 声は音声合成モデル [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M)（Apache-2.0）で事前に作った音声ファイル（`public/voice/`、計約1.3MB）。端末の読み上げ機能は使わないので、どの端末でも同じ声になる
+- セリフを追加・変更したら `tools/voice/` のスクリプトで作り直す：
+  1. `python tools/voice/extract_lines.py lines.json`（ゲーム内のセリフを抜き出す）
+  2. `python tools/voice/gen_voice.py lines.json`（足りない音声だけ作る。キャラの声質と読み方の補正はスクリプト冒頭の `CAST` と `SAY`）
+  - 必要なもの：Python 3.10以上、`pip install torch kokoro "misaki[ja]" soundfile`、`python -m unidic download`、ffmpeg（rubberband 対応）
+
 ## 遊び方
 
 - ローカル：`npm start` → http://localhost:3000 （Node.js 18以上。依存パッケージなし）

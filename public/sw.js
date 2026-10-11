@@ -4,6 +4,7 @@ const SHELL = [
   './',
   'index.html',
   'manifest.webmanifest?v=2',
+  'voice/index.json',
   'vendor/three.min.js',
   'vendor/CopyShader.js',
   'vendor/LuminosityHighPassShader.js',
