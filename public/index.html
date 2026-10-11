@@ -124,6 +124,41 @@ button,label,input{touch-action:manipulation}
   .keys{gap:3px 12px}
   .card{padding:18px 22px}
 }
+/* route map (stage select) */
+#select{position:absolute;inset:0;background:#03050f;touch-action:none;overflow:hidden}
+#mapCv{position:absolute;inset:0;width:100%;height:100%;display:block}
+#mapHead{position:absolute;left:max(20px,env(safe-area-inset-left,0px));top:max(18px,env(safe-area-inset-top,0px));pointer-events:none}
+#mapHead .kicker{margin:0 0 4px}
+#mapHead h2{font-family:var(--f-logo);font-weight:400;font-size:clamp(28px,5vw,46px);margin:0;line-height:1;transform:skewX(-9deg);transform-origin:left bottom;
+  color:#fff;-webkit-text-stroke:1px #14214d;filter:drop-shadow(3px 4px 0 #14214d) drop-shadow(0 0 16px rgba(63,182,255,.45))}
+#mapPanel{position:absolute;right:max(20px,env(safe-area-inset-right,0px));bottom:max(20px,env(safe-area-inset-bottom,0px));width:min(410px,calc(100% - 40px));
+  box-sizing:border-box;background:var(--panel);border:1px solid rgba(63,182,255,.5);padding:16px 18px 18px;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+#mapPanel.nope{animation:nope .32s}
+@keyframes nope{20%{transform:translateX(-8px)}45%{transform:translateX(7px)}70%{transform:translateX(-4px)}}
+.mp-top{display:flex;align-items:center;gap:10px}
+.mp-top .kicker{margin:0;flex:1}
+.mp-arrow{width:38px;height:34px;border:0;background:transparent;color:var(--edge);box-shadow:inset 0 0 0 2px rgba(63,182,255,.6);font:700 16px var(--f-hud);cursor:pointer;
+  border-radius:4px}
+.mp-arrow:disabled{opacity:.3;cursor:default}
+#mapName{font-size:clamp(22px,3.2vw,28px);margin:6px 0 0;line-height:1.2}
+#mapEn{font-family:var(--f-hud);font-weight:700;color:var(--ink-dim);letter-spacing:.2em;font-size:12px;text-transform:uppercase;margin:3px 0 12px}
+.mp-info{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;margin:0 0 12px;font-size:14px}
+.mp-info dt{color:var(--ink-dim)}
+.mp-info dd{margin:0}
+.mp-brief{display:grid;grid-template-columns:52px minmax(0,1fr);gap:10px;align-items:start;margin:0 0 12px;padding:10px;background:rgba(0,0,0,.25);border-left:3px solid var(--edge)}
+#mapFace{width:52px;height:52px;border-radius:6px;display:block}
+.mp-brief b{display:block;font-size:12px;color:#a9c1e8;margin-bottom:2px}
+#mapBrief{margin:0;font-size:14px;line-height:1.55;min-height:3.1em}
+.mp-stats{display:flex;gap:20px;font-family:var(--f-hud);font-weight:700;font-size:12px;letter-spacing:.14em;color:var(--ink-dim);margin:0 0 14px}
+.mp-stats span{color:var(--gold);font-size:20px;margin-left:6px;font-variant-numeric:tabular-nums}
+#launchBtn:disabled{background:#4a5470;color:#aab3c8;cursor:not-allowed;transform:none}
+.mp-hint{margin:10px 0 0;font-size:12px;color:var(--ink-dim)}
+@media (max-width:760px),(max-aspect-ratio:20/21){
+  #mapPanel{left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));width:auto;bottom:max(12px,env(safe-area-inset-bottom,0px));padding:12px 14px 14px}
+  .mp-info{display:none}
+  .mp-hint{display:none}
+}
+@media (max-height:600px){ .mp-info{display:none} #mapPanel{padding:10px 14px 12px} .mp-brief{margin-bottom:8px} .mp-stats{margin-bottom:10px} }
 @media (prefers-reduced-motion:reduce){.btn{transition:none}}
 </style>
 </head>
@@ -136,14 +171,12 @@ button,label,input{touch-action:manipulation}
   <div id="title" class="screen">
     <div class="title-grid">
       <div>
-        <p class="kicker">Mission 1 · Planet Pochiterra</p>
+        <p class="kicker">Star Dogs Squadron · Wander System</p>
         <h1 class="logo"><span>STAR</span><span>DOGS</span></h1>
         <p class="mission">ニャルガ帝国の大艦隊が<b>惑星ポチテラ</b>に侵攻。<br>遊撃隊スタードッグスのリーダー、ハヤテとして迎え撃て。</p>
         <div class="row">
-          <button class="btn" id="startBtn" type="button"><small>STAGE 1</small>惑星ポチテラ</button>
-          <button class="btn alt" id="start2Btn" type="button"><small>STAGE 2</small>マタタビ小惑星帯</button>
+          <button class="btn" id="startBtn" type="button">出撃する</button>
         </div>
-        <p class="best">BEST HITS　STAGE 1 <span id="bestHits">0</span><span class="sep">／</span>STAGE 2 <span id="bestHits2">0</span></p>
         <p id="bootErr" class="err" hidden>3Dエンジンを読み込めませんでした。通信状況を確認して再読み込みしてください。</p>
       </div>
       <section class="brief" aria-label="操作方法">
@@ -196,9 +229,30 @@ button,label,input{touch-action:manipulation}
       <div class="row">
         <button class="btn" id="nextBtn" type="button" hidden>次のステージへ</button>
         <button class="btn" id="retryBtn" type="button">もう一度出撃</button>
-        <button class="btn ghost" id="titleBtn" type="button">タイトルへ</button>
+        <button class="btn ghost" id="titleBtn" type="button">ステージ選択へ</button>
       </div>
     </div>
+  </div>
+
+  <div id="select" hidden>
+    <canvas id="mapCv"></canvas>
+    <div id="mapHead"><p class="kicker">Wander System · Star Map</p><h2>ROUTE SELECT</h2><p class="mp-hint">惑星をタップ／← → で選んで、もう一度タップ／Enter で発進</p></div>
+    <section id="mapPanel" aria-label="ステージ情報">
+      <div class="mp-top">
+        <p class="kicker" id="mapStg">STAGE 1</p>
+        <button class="mp-arrow" id="mapPrev" type="button" aria-label="前のステージ">◀</button>
+        <button class="mp-arrow" id="mapNext" type="button" aria-label="次のステージ">▶</button>
+      </div>
+      <h3 id="mapName">惑星ポチテラ</h3>
+      <p id="mapEn">Planet Pochiterra</p>
+      <dl class="mp-info"><dt>エリア</dt><dd id="mapArea"></dd><dt>ボス</dt><dd id="mapBoss"></dd></dl>
+      <div class="mp-brief"><canvas id="mapFace" width="104" height="104"></canvas><div><b>コテツ</b><p id="mapBrief"></p></div></div>
+      <p class="mp-stats">BEST HITS<span id="mapBest">0</span>　RANK<span id="mapRank">—</span></p>
+      <div class="row">
+        <button class="btn" id="launchBtn" type="button">発進！</button>
+        <button class="btn ghost" id="mapBack" type="button">戻る</button>
+      </div>
+    </section>
   </div>
 
   <div id="touch" hidden>
@@ -261,7 +315,6 @@ const toHdr=c=>c&&c.isColor?c:(hdrCache[c]||(hdrCache[c]=hdr(c,3)));
 
 let best=saved&&saved.best|0;
 try{ best=Math.max(best,+(localStorage.getItem('stardogs-best')||0)); }catch(e){}
-$('#bestHits').textContent=best;
 try{ window.claude?.hot?.snapshot?.(()=>({best})); }catch(e){}
 
 /* ================= renderer ================= */
@@ -1937,6 +1990,11 @@ const keys=new Set(), keyTaps=new Set();
 const GAME_KEYS=new Set(['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','KeyW','KeyA','KeyS','KeyD','KeyQ','KeyE','ShiftLeft','ShiftRight']);
 addEventListener('keydown',e=>{
   if(e.code==='KeyM'){ setSound(!soundOn); return; }
+  if(state==='select'){
+    if(e.code==='Escape'||e.code==='Backspace'){ closeMap(); e.preventDefault(); return; }
+    if((e.code==='Enter'||e.code==='NumpadEnter')&&!(e.target.closest&&e.target.closest('button'))){ mapLaunch(); e.preventDefault(); return; }
+    if(GAME_KEYS.has(e.code)&&e.code!=='Space') e.preventDefault();
+  }
   if(e.code==='KeyP'||e.code==='Escape'){ if(state==='play'||state==='paused'){ togglePause(); e.preventDefault(); } return; }
   if(state==='play'&&GAME_KEYS.has(e.code)) e.preventDefault();
   keys.add(e.code); keyTaps.add(e.code);
@@ -2029,7 +2087,7 @@ function nextStage(){ audioInit(); useStage(Math.min(stageIdx+1,STAGES.length-1)
 function beginStage(){
   checkpoint=0; cpHits=0; P.hits=0;
   state='play'; resetWorld(0); setSong(STG.music);
-  $('#title').hidden=true; $('#result').hidden=true; $('#pause').hidden=true; showTouch(touchMode);
+  $('#title').hidden=true; $('#result').hidden=true; $('#pause').hidden=true; $('#select').hidden=true; showTouch(touchMode);
   if(document.activeElement&&document.activeElement.blur) document.activeElement.blur();
 }
 function startDying(){ state='dying'; P.dieT=0; P.exploded=false; setSong(null); P.charge=0; P.lock=null; showTouch(false); radio('kotetsu','ハヤテェーッ！'); }
@@ -2057,11 +2115,11 @@ function updateClear(dt){
 }
 function rankOf(h){ return h>=130?'S':h>=105?'A':h>=80?'B':h>=55?'C':'D'; }
 function readBest(i){ let b=0; try{ b=+(localStorage.getItem(STAGES[i].bestKey)||0); }catch(e){} return i===0?Math.max(b,best):b; }
-function refreshBest(){ $('#bestHits').textContent=readBest(0); $('#bestHits2').textContent=readBest(1); }
+function refreshBest(){ if(state==='select') mapPanel(); }
 function showResult(win){
   const h=P.hits, prev=readBest(stageIdx), isBest=h>prev, nb=Math.max(prev,h);
   try{ localStorage.setItem(STG.bestKey,String(nb)); }catch(e){}
-  if(stageIdx===0) best=nb; refreshBest();
+  if(stageIdx===0) best=nb; if(win) markClear(stageIdx); refreshBest();
   $('#resKicker').textContent='Mission '+STG.no+' · '+STG.en;
   const hasNext=win&&stageIdx<STAGES.length-1; $('#nextBtn').hidden=!hasNext;
   const t=$('#resTitle'); t.textContent=win?'MISSION COMPLETE':'GAME OVER'; t.className='res-title '+(win?'win':'lose');
@@ -2076,14 +2134,19 @@ function togglePause(){
 }
 function toTitle(){ state='title'; useStage(0); refreshBest(); setSong(null); musVol(MUS_VOL); clearWorld(); railZ=0; dist=0; nextScen=0; P.x=0; P.y=13; camera.position.set(0,16,20); sceneryTick(); updateTerrain(true); ship.visible=true;
   $('#pause').hidden=true; $('#result').hidden=true; $('#title').hidden=false; showTouch(false); }
-$('#startBtn').addEventListener('click',()=>newGame(0));
-$('#start2Btn').addEventListener('click',()=>newGame(1));
+$('#startBtn').addEventListener('click',()=>openMap());
+$('#launchBtn').addEventListener('click',mapLaunch);
+$('#mapBack').addEventListener('click',closeMap);
+$('#mapPrev').addEventListener('click',()=>mapSelect(MAP.i-1));
+$('#mapNext').addEventListener('click',()=>mapSelect(MAP.i+1));
+$('#mapCv').addEventListener('pointerdown',mapHit);
 $('#nextBtn').addEventListener('click',nextStage);
 $('#retryBtn').addEventListener('click',()=>newGame(stageIdx));
 $('#restartBtn').addEventListener('click',()=>{ musVol(MUS_VOL); newGame(stageIdx); });
 $('#resumeBtn').addEventListener('click',togglePause);
 $('#quitBtn').addEventListener('click',toTitle);
-$('#titleBtn').addEventListener('click',toTitle);
+$('#titleBtn').addEventListener('click',()=>{ const won=$('#resTitle').classList.contains('win'), nx=won&&stageIdx<MAP_STAGES.length-1&&!MAP_STAGES[stageIdx+1].locked?stageIdx+1:stageIdx;
+  openMap(nx); MAP.s=stageIdx; });
 $('#invertY').addEventListener('change',e=>{ invertY=e.target.checked; });
 $('#soundOn').addEventListener('change',e=>setSound(e.target.checked));
 
@@ -2340,10 +2403,185 @@ function drawMsg(c){
 
 /* ================= main loop ================= */
 let last=performance.now();
+/* ================= route map (stage select) ================= */
+const MAP_STAGES=[
+  {stage:0,kind:'terra',name:'惑星ポチテラ',en:'Planet Pochiterra',area:'海・平原・都市・渓谷',boss:'機動要塞ネコマタ',
+    brief:'ニャルガ軍がポチテラに降下した。海から都市を抜けて、敵の機動要塞を叩け！'},
+  {stage:1,kind:'belt',name:'マタタビ小惑星帯',en:'Matatabi Belt',area:'小惑星帯・敵艦隊',boss:'宇宙空母クロネコ',
+    brief:'敵艦隊は小惑星帯に逃げ込んだ。岩をかわして、空母クロネコを追いつめろ！'},
+  {stage:null,kind:'enemy',name:'ニャルガ本星',en:'Planet Nyaruga',area:'？？？',boss:'？？？',locked:true,
+    brief:'ニャルガ帝国の本拠地だ。今はまだ近づけん……偵察データを集めるぞ。'},
+];
+const MAP={i:0,s:0,t:0,cv:null,g:null,w:0,h:0,dpr:1,bg:null,spr:{},pos:[],R:[],typed:0,brief:'',selT:0};
+function readClear(i){ try{ return localStorage.getItem('stardogs-clear-'+i)==='1'; }catch(e){ return false; } }
+function markClear(i){ try{ localStorage.setItem('stardogs-clear-'+i,'1'); }catch(e){} }
+/* planet sprites: a lit sphere with procedural surface, rendered once per size */
+function planetSprite(kind,R){
+  const key=kind+R; if(MAP.spr[key]) return MAP.spr[key];
+  const pad=Math.ceil(R*.32), S=2*(R+pad), c=document.createElement('canvas'); c.width=c.height=S; const g=c.getContext('2d');
+  const img=g.createImageData(S,S), d=img.data, cx=S/2;
+  const L=[-.55,-.42,.72], ll=Math.hypot(...L); L[0]/=ll; L[1]/=ll; L[2]/=ll;
+  const sm=(a,b,x)=>{ const t=clamp((x-a)/(b-a),0,1); return t*t*(3-2*t); };
+  for(let y=0;y<S;y++) for(let x=0;x<S;x++){
+    const nx=(x+.5-cx)/R, ny=(y+.5-cx)/R, r2=nx*nx+ny*ny; if(r2>1) continue;
+    const nz=Math.sqrt(1-r2), lon=Math.atan2(nx,nz)+.4, lat=Math.asin(-ny);
+    const dif=Math.max(0,nx*L[0]+ny*L[1]+nz*L[2]), lit=.05+.95*Math.pow(dif,.85), rim=Math.pow(1-nz,2.5);
+    let r,gg,b;
+    if(kind==='terra'){
+      const h=fbm(lon*1.7+3,lat*2.3,5), ice=sm(1.05,1.25,Math.abs(lat)+(h-.5)*.6);
+      if(h>.52){ const k=sm(.52,.7,h); r=lerp(.22,.55,k); gg=lerp(.5,.45,k); b=lerp(.18,.25,k); }
+      else { const k=sm(.25,.52,h); r=lerp(.02,.06,k); gg=lerp(.12,.32,k); b=lerp(.38,.62,k);
+        const hx=nx-L[0],hy=ny-L[1],hz=nz-L[2]+1, hl=Math.hypot(hx,hy,hz); const sp=Math.pow(Math.max(0,(nx*hx+ny*hy+nz*hz)/hl),60)*.9; r+=sp; gg+=sp; b+=sp; }
+      r=lerp(r,.95,ice); gg=lerp(gg,.97,ice); b=lerp(b,1,ice);
+      const cl=sm(.56,.76,fbm(lon*3.2+9,lat*5.5,4)); r=lerp(r,1,cl*.9); gg=lerp(gg,1,cl*.9); b=lerp(b,1,cl*.9);
+      r=r*lit+rim*.35*dif; gg=gg*lit+rim*.6*dif; b=b*lit+rim*1.1*(dif*.8+.1);
+    } else if(kind==='belt'){
+      const h=fbm(lon*2.6+1,lat*2.6,5), cr=fbm(lon*7+5,lat*7,3);
+      const crater=sm(.62,.68,cr)-sm(.68,.74,cr)*.6;
+      r=lerp(.42,.62,h)+crater*.12; gg=lerp(.4,.55,h)+crater*.1; b=lerp(.3,.4,h)+crater*.06;
+      r*=lit; gg*=lit; b*=lit; r+=rim*.15*dif; gg+=rim*.18*dif; b+=rim*.1*dif;
+    } else {
+      const w=fbm(lon*1.5,lat*1.5,3), band=Math.sin(lat*9+w*5)*.5+.5, spot=sm(.66,.8,fbm(lon*3+2,lat*3+7,4));
+      r=lerp(.45,.75,band); gg=lerp(.1,.2,band); b=lerp(.38,.5,band);
+      r=r*lit+spot*.9; gg=gg*lit+spot*.2; b=b*lit+spot*.15; r+=rim*.8*(dif*.7+.15); gg+=rim*.15*dif; b+=rim*.5*(dif*.7+.15);
+    }
+    const a=clamp((1-Math.sqrt(r2))*R*1.5,0,1), o=(y*S+x)*4;
+    d[o]=clamp(r,0,1)**(1/1.15)*255; d[o+1]=clamp(gg,0,1)**(1/1.15)*255; d[o+2]=clamp(b,0,1)**(1/1.15)*255; d[o+3]=a*255;
+  }
+  g.putImageData(img,0,0);
+  // atmosphere halo
+  const hc=kind==='terra'?'110,180,255':kind==='enemy'?'255,90,160':'200,190,150', hs=kind==='belt'?.18:.55;
+  const q=g.createRadialGradient(cx,cx,R*.92,cx,cx,R*1.3); q.addColorStop(0,`rgba(${hc},${hs})`); q.addColorStop(.35,`rgba(${hc},${hs*.35})`); q.addColorStop(1,`rgba(${hc},0)`);
+  g.globalCompositeOperation='destination-over'; g.fillStyle=q; g.fillRect(0,0,S,S);
+  return MAP.spr[key]=c;
+}
+function mapBackground(w,h){
+  const c=document.createElement('canvas'); c.width=w; c.height=h; const g=c.getContext('2d');
+  const bg=g.createLinearGradient(0,0,w,h); bg.addColorStop(0,'#03050f'); bg.addColorStop(1,'#080c24'); g.fillStyle=bg; g.fillRect(0,0,w,h);
+  g.globalCompositeOperation='lighter';
+  const neb=(x,y,r,col,a)=>{ const q=g.createRadialGradient(x,y,0,x,y,r); q.addColorStop(0,`rgba(${col},${a})`); q.addColorStop(1,`rgba(${col},0)`); g.fillStyle=q; g.fillRect(x-r,y-r,r*2,r*2); };
+  const m=Math.max(w,h);
+  neb(w*.78,h*.2,m*.45,'150,40,140',.16); neb(w*.6,h*.32,m*.3,'60,90,220',.14); neb(w*.15,h*.85,m*.4,'30,110,170',.13); neb(w*.95,h*.9,m*.35,'120,30,90',.1);
+  for(let i=0;i<14;i++) neb(rand(0,w),rand(0,h),m*rand(.05,.14),Math.random()<.5?'120,80,200':'70,120,230',.05);
+  // milky band
+  g.save(); g.translate(w*.5,h*.5); g.rotate(-.5); for(let i=0;i<260;i++){ const x=rand(-m*.8,m*.8), y=(Math.random()+Math.random()-1)*m*.09; neb(x,y,m*rand(.01,.04),'200,210,255',.025); } g.restore();
+  for(let i=0;i<w*h/2600;i++){ const x=Math.random()*w, y=Math.random()*h, s=Math.pow(Math.random(),6)*1.8+.35, a=.25+Math.random()*.6;
+    g.fillStyle=`rgba(${Math.random()<.3?'255,226,200':'210,225,255'},${a})`; g.beginPath(); g.arc(x,y,s*MAP.dpr,0,TAU); g.fill(); }
+  // distant sun matching the planets' lighting
+  neb(-w*.02,-h*.04,m*.32,'255,214,160',.5); neb(-w*.02,-h*.04,m*.08,'255,245,225',.9);
+  return c;
+}
+function mapLayout(){
+  const cv=MAP.cv, dpr=MAP.dpr=Math.min(devicePixelRatio||1,2), w=innerWidth, h=innerHeight;
+  if(cv.width!==Math.round(w*dpr)||cv.height!==Math.round(h*dpr)||!MAP.bg){ cv.width=Math.round(w*dpr); cv.height=Math.round(h*dpr); MAP.bg=mapBackground(cv.width,cv.height); }
+  MAP.w=w; MAP.h=h;
+  const panel=$('#mapPanel').getBoundingClientRect(), head=$('#mapHead').getBoundingClientRect(), tall=w<760||h>w*1.05;
+  const R=clamp(Math.min(w,tall?h*.55:h)*.085,30,78); MAP.R=[R,R*.62,R*1.18];
+  let rel, x0=0, y0=head.bottom, x1=w, y1=h;
+  if(tall){ y1=panel.top; rel=[[.26,.8],[.72,.52],[.3,.2]]; }
+  else { x1=Math.min(w,panel.left+panel.width*.35); rel=[[.13,.74],[.42,.5],[.74,.3]]; }
+  const sx=x1-x0, sy=y1-y0;
+  MAP.pos=rel.map(([u,v],i)=>[x0+sx*u, clamp(y0+sy*v, y0+MAP.R[i]*1.3, y1-MAP.R[i]*(i===1?2.1:1.3)-62)]);
+}
+function routePt(k,u){ const a=MAP.pos[k], b=MAP.pos[k+1], mx=(a[0]+b[0])/2, my=(a[1]+b[1])/2, dx=b[0]-a[0], dy=b[1]-a[1], cx=mx+dy*.22, cy=my-dx*.22, v=1-u;
+  return [v*v*a[0]+2*v*u*cx+u*u*b[0], v*v*a[1]+2*v*u*cy+u*u*b[1]]; }
+function drawShip(g,x,y,ang,sc){
+  g.save(); g.translate(x,y); g.rotate(ang); g.scale(sc,sc);
+  const fl=g.createRadialGradient(-17,0,0,-17,0,14); fl.addColorStop(0,'rgba(190,235,255,.95)'); fl.addColorStop(1,'rgba(80,160,255,0)'); g.fillStyle=fl; g.beginPath(); g.arc(-17,0,14,0,TAU); g.fill();
+  g.fillStyle='#ff8a1f'; g.beginPath(); g.moveTo(-6,0); g.lineTo(-14,-17); g.lineTo(-8,-17); g.lineTo(6,-3); g.closePath(); g.fill(); g.beginPath(); g.moveTo(-6,0); g.lineTo(-14,17); g.lineTo(-8,17); g.lineTo(6,3); g.closePath(); g.fill();
+  g.fillStyle='#eef3fb'; g.beginPath(); g.moveTo(20,0); g.lineTo(-12,-6); g.lineTo(-16,0); g.lineTo(-12,6); g.closePath(); g.fill();
+  g.fillStyle='#3fb6ff'; g.beginPath(); g.ellipse(4,0,5,2.6,0,0,TAU); g.fill();
+  g.restore();
+}
+function mapDraw(dt){
+  const g=MAP.g, dpr=MAP.dpr, t=MAP.t+=dt; MAP.selT+=dt;
+  g.setTransform(1,0,0,1,0,0); g.drawImage(MAP.bg,0,0); g.setTransform(dpr,0,0,dpr,0,0);
+  // twinkles
+  for(let i=0;i<26;i++){ const x=(Math.sin(i*91.7)*.5+.5)*MAP.w, y=(Math.sin(i*37.3+2)*.5+.5)*MAP.h, a=Math.max(0,Math.sin(t*(1.2+i%5*.3)+i*2.1));
+    g.fillStyle=`rgba(255,255,255,${a*.8})`; g.fillRect(x-.5,y-3*a,1,6*a); g.fillRect(x-3*a,y-.5,6*a,1); }
+  // routes
+  for(let k=0;k<MAP.pos.length-1;k++){
+    const done=readClear(MAP_STAGES[k].stage??-1), lockedNext=MAP_STAGES[k+1].locked;
+    g.save(); g.lineCap='round'; g.beginPath(); for(let j=0;j<=40;j++){ const p=routePt(k,j/40); j?g.lineTo(p[0],p[1]):g.moveTo(p[0],p[1]); }
+    if(done&&!lockedNext){ g.strokeStyle='rgba(255,180,60,.35)'; g.lineWidth=9; g.stroke(); g.strokeStyle='#ffc94a'; g.lineWidth=3; g.stroke(); }
+    else { g.setLineDash([9,11]); g.lineDashOffset=-t*26; g.strokeStyle=lockedNext?'rgba(255,110,150,.45)':'rgba(150,200,255,.7)'; g.lineWidth=2.5; g.stroke(); }
+    g.restore();
+  }
+  // planets
+  MAP_STAGES.forEach((m,i)=>{
+    const [x,y]=MAP.pos[i], R=MAP.R[i], sel=i===MAP.i;
+    const ring=m.kind==='belt'?(front)=>{ g.save(); g.translate(x,y); g.rotate(-.32);
+      for(let j=0;j<150;j++){ const a=j*2.399+t*.12*(1+(j%3)*.15), s=Math.sin(a); if((s>0)!==front) continue; const rr=R*(1.7+((j*7)%11)/11*.75);
+        const px=Math.cos(a)*rr, py=s*rr*.3, z=1+((j*13)%7)/7*1.6; g.fillStyle=`rgba(${190+(j%4)*12},${165+(j%3)*10},${120+(j%5)*8},${front?.95:.6})`; g.beginPath(); g.ellipse(px,py,z*1.2,z,j,0,TAU); g.fill(); }
+      g.restore(); }:null;
+    if(ring) ring(false);
+    const spr=planetSprite(m.kind,Math.round(R*dpr)), s=spr.width/dpr;
+    g.drawImage(spr,x-s/2,y-s/2,s,s);
+    if(m.locked){ g.fillStyle='rgba(6,8,22,.45)'; g.beginPath(); g.arc(x,y,R+.5,0,TAU); g.fill(); }
+    if(ring) ring(true);
+    if(m.locked){ g.fillStyle='rgba(255,255,255,.85)'; g.font=`400 ${Math.round(R*.75)}px "Russo One","Arial Black",sans-serif`; g.textAlign='center'; g.textBaseline='middle'; g.fillText('?',x,y+2); }
+    if(sel){ const p=1+Math.sin(t*4)*.04, rr=R*(m.kind==='belt'?2.05:1.32)*p; g.save(); g.translate(x,y); g.rotate(t*.6);
+      g.strokeStyle=m.locked?'rgba(255,120,160,.9)':'rgba(255,210,63,.95)'; g.lineWidth=2; g.setLineDash([rr*.5,rr*.29]); g.beginPath(); g.arc(0,0,rr,0,TAU); g.stroke(); g.restore(); }
+    // label
+    const ly=y+R*(m.kind==='belt'?2.1:1.32)+18;
+    g.textAlign='center'; g.textBaseline='alphabetic';
+    g.font='700 11px "Chakra Petch",Consolas,monospace'; g.fillStyle=sel?'#ffd23f':'#7fc8ff'; g.fillText(m.locked?'LOCKED':'STAGE '+(m.stage+1),x,ly);
+    g.font='700 14px "M PLUS 1p","Hiragino Kaku Gothic ProN",Meiryo,sans-serif'; g.fillStyle=sel?'#ffffff':'rgba(234,242,255,.82)'; g.fillText(m.locked?'？？？':m.name,x,ly+18);
+    if(!m.locked&&readClear(m.stage)){ g.font='700 10px "Chakra Petch",Consolas,monospace'; const tw=46; g.fillStyle='#ffd23f'; g.fillRect(x-tw/2,ly+25,tw,15); g.fillStyle='#1d0d00'; g.fillText('CLEAR',x,ly+36); }
+  });
+  // our ship flies the route to the selection
+  const d=MAP.i-MAP.s; MAP.s+=Math.sign(d)*Math.min(Math.abs(d),dt*1.8);
+  const k=Math.min(Math.floor(MAP.s),MAP.pos.length-2), u=MAP.s-k, p=routePt(k,u), q=routePt(k,Math.min(1,u+.02)), q0=routePt(k,Math.max(0,u-.02));
+  const moving=Math.abs(d)>.002, Rc=lerp(MAP.R[k],MAP.R[k+1],u), lift=(Rc*(MAP_STAGES[Math.round(MAP.s)].kind==='belt'?1.1:.9)+26)*(1-Math.sin(Math.PI*u)*.55);
+  const ang=moving?Math.atan2(q[1]-q0[1],q[0]-q0[0])+(d<0?Math.PI:0):-.25+Math.sin(t*1.4)*.06;
+  drawShip(g,p[0]-lift*.35,p[1]-lift+Math.sin(t*2.2)*3,ang,.95);
+  // face animation while the briefing types out
+  if(MAP.typed<MAP.brief.length){ MAP.typed=Math.min(MAP.brief.length,MAP.typed+dt*26); $('#mapBrief').textContent=MAP.brief.slice(0,Math.floor(MAP.typed)); }
+  const open=MAP.typed<MAP.brief.length&&((t*9)|0)%2===0, fc=$('#mapFace').getContext('2d'); fc.drawImage(portrait('kotetsu',open),0,0,fc.canvas.width,fc.canvas.height);
+}
+function mapPanel(){
+  const m=MAP_STAGES[MAP.i];
+  $('#mapStg').textContent=m.locked?'STAGE ?':'STAGE '+(m.stage+1);
+  $('#mapName').textContent=m.locked?'？？？':m.name; $('#mapEn').textContent=m.en;
+  $('#mapArea').textContent=m.area; $('#mapBoss').textContent=m.boss;
+  const b=m.locked?0:readBest(m.stage), cl=!m.locked&&readClear(m.stage);
+  $('#mapBest').textContent=m.locked?'—':b; $('#mapRank').textContent=cl?rankOf(b):'—';
+  const lb=$('#launchBtn'); lb.disabled=!!m.locked; lb.textContent=m.locked?'未開放':'発進！';
+  MAP.brief=m.brief; MAP.typed=0; $('#mapBrief').textContent='';
+  $('#mapPrev').disabled=MAP.i===0; $('#mapNext').disabled=MAP.i===MAP_STAGES.length-1;
+}
+function mapSelect(i){ i=clamp(i,0,MAP_STAGES.length-1); if(i===MAP.i) return; MAP.i=i; MAP.selT=0; SFX.blip(); mapPanel(); }
+function openMap(i){
+  audioInit(); state='select'; setSong(null); clearWorld(); showTouch(false);
+  $('#title').hidden=true; $('#result').hidden=true; $('#pause').hidden=true; $('#select').hidden=false;
+  if(i!=null) MAP.i=i; MAP.s=MAP.i; MAP.selT=1; mapPanel(); mapLayout(); setTimeout(()=>$('#launchBtn').focus({preventScroll:true}),30);
+}
+function closeMap(){ if(state!=='select') return; $('#select').hidden=true; toTitle(); }
+function mapLaunch(){
+  if(state!=='select') return; const m=MAP_STAGES[MAP.i];
+  if(m.locked){ SFX.low(); const p=$('#mapPanel'); p.classList.remove('nope'); void p.offsetWidth; p.classList.add('nope'); return; }
+  SFX.charged(); $('#select').hidden=true; newGame(m.stage);
+}
+function mapTick(dt){
+  if(MAP.w!==innerWidth||MAP.h!==innerHeight) mapLayout();
+  // keyboard arrows / gamepad: edges on the shared control state
+  if(ctrl.x>.5&&pc.x<=.5||ctrl.y>.5&&pc.y<=.5) mapSelect(MAP.i+1);
+  if(ctrl.x<-.5&&pc.x>=-.5||ctrl.y<-.5&&pc.y>=-.5) mapSelect(MAP.i-1);
+  if(ctrl.fire&&!pc.fire&&!keys.has('Space')&&!mouseFire) mapLaunch();
+  if(ctrl.bomb&&!pc.bomb&&!keys.has('KeyE')) closeMap();
+  mapDraw(dt);
+}
+function mapHit(e){
+  if(state!=='select') return; const x=e.clientX, y=e.clientY;
+  for(let i=0;i<MAP_STAGES.length;i++){ const [px,py]=MAP.pos[i], R=MAP.R[i]*(MAP_STAGES[i].kind==='belt'?2:1.35)+14;
+    if(Math.hypot(x-px,y-py)<R){ if(i===MAP.i&&MAP.selT>.45) mapLaunch(); else mapSelect(i); return; } }
+}
+MAP.cv=$('#mapCv'); MAP.g=MAP.cv.getContext('2d');
 function frame(t){
   requestAnimationFrame(frame);
   const dt=Math.min(.05,Math.max(0,(t-last)/1000)); last=t;
   if(state==='paused'){ readCtrl(); drawHUD(); return; }
+  if(state==='select'){ readCtrl(); mapTick(dt); return; }
   step(dt);
   if(composer) composer.render(dt); else renderer.render(scene,camera);
   drawHUD();
@@ -2361,7 +2599,7 @@ toTitle();
 }
 requestAnimationFrame(frame);
 window.__stardogs={get state(){return state;},P,get dist(){return dist;},get boss(){return boss;},ents,
-  warp(d){ resetWorld(d); },newGame,useStage,get EVENTS(){ return STG.events; },get stage(){ return stageIdx; },get env(){ return envName; },audio:A,music,setSong,dbg:{addFighter,addMine,addTurret,addRing,explode,killEnemy,spawnBoss2,bossDamage}};
+  warp(d){ resetWorld(d); },newGame,openMap,MAP,useStage,get EVENTS(){ return STG.events; },get stage(){ return stageIdx; },get env(){ return envName; },audio:A,music,setSong,dbg:{addFighter,addMine,addTurret,addRing,explode,killEnemy,spawnBoss2,bossDamage}};
 }
 if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){
   addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(e=>console.warn('service worker',e)); });
