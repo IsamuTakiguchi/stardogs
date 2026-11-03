@@ -2094,7 +2094,7 @@ function addCrystalPillar(x,z,r,h,solid){ // a glowing crystal column; solid one
   return addEnt(e);
 }
 /* laser gate: a curtain of beams with one gap that slides side to side. Fly through the gap, or shoot the generator on top */
-const GATE_BEAM=new THREE.MeshBasicMaterial({color:hdr('#ff2a5a',6),transparent:true,opacity:.85,blending:THREE.AdditiveBlending,depthWrite:false});
+const GATE_BEAM=new THREE.MeshBasicMaterial({color:hdr('#ff2a5a',6),transparent:true,opacity:.85,blending:THREE.AdditiveBlending,depthWrite:false,fog:false});
 const GATE_FRAME=M('#2a2234',{r:.35,m:.8});
 function addGate(z,speed){
   const g=new THREE.Group(); g.position.set(0,0,z);
