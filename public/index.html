@@ -2280,7 +2280,7 @@ function spawnBoss3(){
         const xt=sweep?-bm.dir*44+bm.dir*88*easeInOut(k):bm.tx+bm.dir*k*14;
         _v1.set(xt,bm.ty,railZ); _v2.subVectors(_v1,from).normalize().multiplyScalar(260).add(from);
         beam.visible=charge?((bm.t*12)|0)%2===0:firing; aimBeam(from,_v2,charge?.2:(sweep?2.3:1.7)+Math.sin(T*60)*.2); beamMat.opacity=charge?.6:.9;
-        beamMat.color.copy(sweep?hdr('#ff3b6b',6):hdr('#9dff6a',6));
+        beamMat.color.copy(sweep?hdr('#ff3b6b',6):hdr('#7dff4a',2.4));
         if(firing){ if(Math.random()<.5) fxFlash(from,9,sweep?'#ff5a7a':'#b8ff8a',.12);
           _v3.subVectors(_v2,from); const len2=_v3.lengthSq();
           for(const pl of flying()){ const sp=pl.ship.position, tt=clamp(_d.subVectors(sp,from).dot(_v3)/len2,0,1); _d.copy(from).addScaledVector(_v3,tt); if(_d.distanceTo(sp)<3.2) damage(pl,22); } }
