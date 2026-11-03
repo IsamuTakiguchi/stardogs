@@ -656,7 +656,7 @@ function terrainH3(x,z){
   const side=smooth(44,44+lerp(lerp(lerp(90,60,Z.lava),18,Z.gorge),150,Z.plaza),ax);
   return lerp(base,hills,side);
 }
-const TINT3={basalt:lin('#6a5470'),ash:lin('#50444e'),scorch:lin('#8a3016'),slab:lin('#3c3448')};
+const TINT3={basalt:lin('#54445c'),ash:lin('#50444e'),scorch:lin('#8a3016'),slab:lin('#3c3448')};
 function terrainSurf3(tint,w,x,z,h,ny){
   const s=-z, ax=Math.abs(x), Z=zone3Mix(s), v=vnoise(x*.02,z*.02), v2=vnoise(x*.07+3,z*.07);
   tint.copy(TINT3.basalt).multiplyScalar(.75+.45*v+.15*v2);
@@ -735,9 +735,9 @@ waterMat.onBeforeCompile=sh=>{
 };
 TEX_WATERN.repeat.set(150,150);
 /* lava: dark crust over glowing cracks (emissive, so it blooms), scrolled and pulsed in step() */
-const TEX_LAVA=(()=>{ const t=surfTex(texFromFn(256,(u,v)=>{ const n=tileFbm(u,v,4,4), cr=Math.pow(1-Math.abs(tileFbm(u+.21,v+.43,6,4)*2-1),7), hot=clamp(cr*1.5+smooth(.62,.8,n)*.6,0,1);
+const TEX_LAVA=(()=>{ const t=surfTex(texFromFn(256,(u,v)=>{ const n=tileFbm(u,v,4,4), cr=Math.pow(1-Math.abs(tileFbm(u+.21,v+.43,6,4)*2-1),14), hot=clamp(cr*1.3+smooth(.7,.85,n)*.35,0,1)*(.55+.45*n);
   return [255*hot,255*Math.pow(hot,1.8)*.55,255*Math.pow(hot,3)*.18]; })); t.encoding=THREE.sRGBEncoding; t.repeat.set(70,70); return t; })();
-const LAVA_MAT=new THREE.MeshStandardMaterial({color:lin('#1c0d0a'),roughness:.9,metalness:0,emissive:new THREE.Color(1,1,1),emissiveMap:TEX_LAVA,emissiveIntensity:3.2,envMapIntensity:.3});
+const LAVA_MAT=new THREE.MeshStandardMaterial({color:lin('#1c0d0a'),roughness:.9,metalness:0,emissive:new THREE.Color(1,1,1),emissiveMap:TEX_LAVA,emissiveIntensity:1.8,envMapIntensity:.3});
 const water=new THREE.Mesh(new THREE.PlaneGeometry(4200,4200),waterMat); water.rotation.x=-Math.PI/2; water.receiveShadow=true; scene.add(water);
 /* distant ranges and clouds ride with the camera */
 const far=new THREE.Group(); scene.add(far);
@@ -843,7 +843,7 @@ const SC={
   crystal:scatter((()=>{ const parts=[]; [[0,0,0,1,1],[.45,0,.2,.6,.65],[-.4,0,-.25,.55,.5],[.1,0,-.45,.45,.4]].forEach(([x,y,z,r,h],i)=>{
       const g=new THREE.OctahedronGeometry(1,0); g.scale(r*.45,h*1.6,r*.45); g.translate(0,h*1.2,0); g.rotateZ((i-1.5)*.18); g.rotateX((i%2-.5)*.25); g.translate(x,y,z); parts.push(g); });
     return mergeGeos(parts.map(g=>{ g.computeVertexNormals(); return g; })); })(),
-    new THREE.MeshStandardMaterial({color:lin('#d8a8ff'),emissive:lin('#8a2cff'),emissiveIntensity:1.8,roughness:.2,metalness:.1,vertexColors:true}),200),
+    new THREE.MeshStandardMaterial({color:lin('#c090ff'),emissive:lin('#8a2cff'),emissiveIntensity:.9,roughness:.15,metalness:.3,envMapIntensity:1.5,vertexColors:true}),200),
   ast:scatter(AST_GEOS[0],AST_MAT,420),
   ast2:scatter(AST_GEOS[1],AST_MAT,420),
 };
@@ -2082,9 +2082,9 @@ const EVENTS2=[
   [6250,()=>spawnBoss2()],
 ];
 /* ---------- stage 3 set pieces: ニャルガ本星 ---------- */
-const FORT_MATS=['#4a4458','#3c3a4a','#55465e'].map(c=>new THREE.MeshStandardMaterial({color:lin(c),map:WIN_TEX.map,emissiveMap:WIN_TEX.em,emissive:lin('#d070ff'),emissiveIntensity:1.5,roughness:.4,metalness:.5}));
+const FORT_MATS=['#4a4458','#3c3a4a','#55465e'].map(c=>new THREE.MeshStandardMaterial({color:lin(c),map:WIN_TEX.map,emissiveMap:WIN_TEX.em,emissive:lin('#b040ff'),emissiveIntensity:.8,roughness:.4,metalness:.5}));
 const ROCK_COL_MAT3=new THREE.MeshStandardMaterial({vertexColors:true,color:lin('#7a6078'),roughness:.9,metalness:0});
-const CRYSTAL_MAT=new THREE.MeshStandardMaterial({color:lin('#e0b8ff'),emissive:lin('#9a3cff'),emissiveIntensity:2.2,roughness:.18,metalness:.1});
+const CRYSTAL_MAT=new THREE.MeshStandardMaterial({color:lin('#b27aff'),emissive:lin('#8a2cff'),emissiveIntensity:.75,roughness:.12,metalness:.35,envMapIntensity:1.6});
 const CRYSTAL_GEO=(()=>{ const parts=[]; [[0,0,1,1],[.55,.2,.55,.62],[-.5,-.15,.5,.55],[.1,-.55,.4,.42]].forEach(([x,z,r,h],i)=>{
   const g=new THREE.OctahedronGeometry(1,0); g.scale(r*.5,h*.55,r*.5); g.translate(0,h*.5,0); g.rotateZ((i-1.5)*.12); g.translate(x,0,z); parts.push(g); });
   return mergeGeos(parts.map(g=>{ g.computeVertexNormals(); return g; })); })();
@@ -2823,7 +2823,7 @@ function step(dt){
   const cp=camera.position;
   if(surface){ far.position.set(cp.x*.2,0,cp.z); farN.position.copy(far.position);
     water.position.set(cp.x,0,cp.z-900); TEX_WATERN.offset.set(water.position.x*150/4200+T*.01,-water.position.z*150/4200+T*.025); WATER_OFF2.set(T*-.013,T*.017);
-    if(envName==='nyaruga'){ TEX_LAVA.offset.set(water.position.x*70/4200+T*.004,-water.position.z*70/4200+T*.006); LAVA_MAT.emissiveIntensity=3+Math.sin(T*1.7)*.5+Math.sin(T*4.3)*.25; }
+    if(envName==='nyaruga'){ TEX_LAVA.offset.set(water.position.x*70/4200+T*.004,-water.position.z*70/4200+T*.006); LAVA_MAT.emissiveIntensity=1.7+Math.sin(T*1.7)*.3+Math.sin(T*4.3)*.15; }
     updateTerrain(false); }
   else updateSpace(dt);
   sun.target.position.set(Math.round(foc.x*.5),0,Math.round(railZ-55)); sun.position.copy(sun.target.position).addScaledVector(SUN_DIR,330); sun.target.updateMatrixWorld();
