@@ -418,15 +418,20 @@ TEX_WATERN.wrapS=TEX_WATERN.wrapT=THREE.RepeatWrapping;
 /* ---------- environments ----------
    Stage 1: a physically based daytime sky (single-scattering Rayleigh + Mie), baked once into an HDR cube map.
    Stage 2: deep space - milky way, nebulae and faint star dust baked into a cube map, plus crisp star points,
-   a lit planet with an atmosphere and the sun. setEnv() switches between them. */
+   a lit planet with an atmosphere and the sun.
+   Stage 3: the same atmosphere model with alien scattering (red and violet scatter, green passes) at dusk, over a lava sea.
+   setEnv() switches between them. */
 const SUN_DIR=new V3();
 const SUN_PLANET=new V3(.5,.45,-.74).normalize();
 const SUN_SPACE=new V3(.62,.3,-.72).normalize();
+const SUN_NYARUGA=new V3(-.42,.14,-.9).normalize();
+// Rayleigh scattering and a pure absorber (like ozone) per RGB; Nyaruga's air soaks up green, so dusk turns rose and violet
+const KR_EARTH=[5.5e-6,13e-6,22.4e-6], KA_EARTH=[0,0,0], KR_NYARUGA=[10e-6,5e-6,14e-6], KA_NYARUGA=[0,12e-6,4e-6];
 const SKY_SCALE=.42;
 const ATMOS_GLSL=`
 const float PI_A=3.14159265;
 const float R_PLANET=6371e3; const float R_ATMOS=6471e3;
-const vec3 K_RLH=vec3(5.5e-6,13.0e-6,22.4e-6); const float K_MIE=21e-6; const float SH_RLH=8e3; const float SH_MIE=1.2e3; const float G_MIE=0.758;
+uniform vec3 K_RLH; uniform vec3 K_ABS; const float K_MIE=21e-6; const float SH_RLH=8e3; const float SH_MIE=1.2e3; const float G_MIE=0.758;
 vec2 rsi(vec3 r0,vec3 rd,float sr){ float a=dot(rd,rd); float b=2.0*dot(rd,r0); float c=dot(r0,r0)-sr*sr; float d=b*b-4.0*a*c;
   if(d<0.0) return vec2(1e5,-1e5); return vec2((-b-sqrt(d))/(2.0*a),(-b+sqrt(d))/(2.0*a)); }
 vec3 atmosphere(vec3 r,vec3 pSun,float iSun){
@@ -443,14 +448,14 @@ vec3 atmosphere(vec3 r,vec3 pSun,float iSun){
     float dR=exp(-iH/SH_RLH)*iStep; float dM=exp(-iH/SH_MIE)*iStep; odR+=dR; odM+=dM;
     float jStep=rsi(iPos,pSun,R_ATMOS).y/6.0; float jTime=0.0; float jR=0.0; float jM=0.0;
     for(int j=0;j<6;j++){ vec3 jPos=iPos+pSun*(jTime+jStep*0.5); float jH=length(jPos)-R_PLANET; jR+=exp(-jH/SH_RLH)*jStep; jM+=exp(-jH/SH_MIE)*jStep; jTime+=jStep; }
-    vec3 attn=exp(-(K_MIE*(odM+jM)+K_RLH*(odR+jR)));
+    vec3 attn=exp(-(K_MIE*(odM+jM)+(K_RLH+K_ABS)*(odR+jR)));
     tR+=dR*attn; tM+=dM*attn; iTime+=iStep;
   }
   return iSun*(pR*K_RLH*tR+pM*K_MIE*tM);
 }`;
 /* the same integral in JS: fog colour and sunlight colour must match the baked sky */
-function atmosJS(r,pSun,iSun){
-  const RP=6371e3,RA=6471e3,KR=[5.5e-6,13e-6,22.4e-6],KM=21e-6,SR=8e3,SM=1.2e3,G=.758;
+function atmosJS(r,pSun,iSun,KR,KA){
+  KR=KR||KR_EARTH; KA=KA||KA_EARTH; const RP=6371e3,RA=6471e3,KM=21e-6,SR=8e3,SM=1.2e3,G=.758;
   const rsi=(o,d,sr)=>{ const a=d.dot(d),b=2*d.dot(o),c=o.dot(o)-sr*sr,dd=b*b-4*a*c; if(dd<0) return [1e5,-1e5]; const q=Math.sqrt(dd); return [(-b-q)/(2*a),(-b+q)/(2*a)]; };
   const r0=new V3(0,RP+1e3,0), p=rsi(r0,r,RA); if(p[0]>p[1]) return [0,0,0];
   const tg=rsi(r0,r,RP)[0]; if(tg>0) p[1]=Math.min(p[1],tg);
@@ -460,15 +465,15 @@ function atmosJS(r,pSun,iSun){
   for(let i=0;i<12;i++){ ip.copy(r0).addScaledVector(r,iT+iStep*.5); const h=ip.length()-RP, dR=Math.exp(-h/SR)*iStep, dM=Math.exp(-h/SM)*iStep; odR+=dR; odM+=dM;
     const jStep=rsi(ip,pSun,RA)[1]/6; let jT=0,jR=0,jM=0;
     for(let j=0;j<6;j++){ jp.copy(ip).addScaledVector(pSun,jT+jStep*.5); const jh=jp.length()-RP; jR+=Math.exp(-jh/SR)*jStep; jM+=Math.exp(-jh/SM)*jStep; jT+=jStep; }
-    for(let k=0;k<3;k++){ const at=Math.exp(-(KM*(odM+jM)+KR[k]*(odR+jR))); tR[k]+=dR*at; tM[k]+=dM*at; }
+    for(let k=0;k<3;k++){ const at=Math.exp(-(KM*(odM+jM)+(KR[k]+KA[k])*(odR+jR))); tR[k]+=dR*at; tM[k]+=dM*at; }
     iT+=iStep; }
   return [0,1,2].map(k=>iSun*(pR*KR[k]*tR[k]+pM*KM*tM[k]));
 }
-function sunTransmittance(pSun){ // colour of direct sunlight after passing through the atmosphere
-  const RP=6371e3,RA=6471e3,KR=[5.5e-6,13e-6,22.4e-6],KM=21e-6,SR=8e3,SM=1.2e3;
+function sunTransmittance(pSun,KR,KA){ // colour of direct sunlight after passing through the atmosphere
+  KR=KR||KR_EARTH; KA=KA||KA_EARTH; const RP=6371e3,RA=6471e3,KM=21e-6,SR=8e3,SM=1.2e3;
   const o=new V3(0,RP+1e3,0), b=2*pSun.dot(o), c=o.dot(o)-RA*RA, L=(-b+Math.sqrt(b*b-4*c))/2, n=24, st=L/n, q=new V3(); let odR=0,odM=0;
   for(let i=0;i<n;i++){ q.copy(o).addScaledVector(pSun,(i+.5)*st); const h=q.length()-RP; odR+=Math.exp(-h/SR)*st; odM+=Math.exp(-h/SM)*st; }
-  return KR.map(k=>Math.exp(-(k*odR+KM*odM)));
+  return KR.map((k,i)=>Math.exp(-((k+KA[i])*odR+KM*odM)));
 }
 const SKYBAKE_VS='varying vec3 vDir; void main(){ vDir=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }';
 const SKY_FS=`uniform vec3 sunDir; uniform float scale; uniform vec3 ground; uniform float groundMix; varying vec3 vDir;
@@ -498,6 +503,23 @@ void main(){ vec3 d=normalize(vDir);
   float dust=smoothstep(0.996,1.0,h3(floor(d*700.0)))*0.35+smoothstep(0.9992,1.0,h3(floor(d*380.0)+3.0))*1.4;
   c+=dust*mix(vec3(1.0,0.85,0.7),vec3(0.75,0.85,1.0),h3(floor(d*90.0)));
   gl_FragColor=vec4(max(c,vec3(0.0)),1.0); }`;
+const NYA_SKY_FS=`uniform vec3 sunDir; uniform float scale; uniform vec3 ground; uniform float groundMix; uniform vec3 moonDir; uniform vec3 moon2Dir; varying vec3 vDir;
+${ATMOS_GLSL}
+${NOISE3_GLSL}
+vec3 moonDisk(vec3 d,vec3 md,float rad,vec3 alb,float seed){ // a lit sphere seen as a disc; x<0 means off the disc
+  float c=dot(d,md); vec3 q=(d-md*c)/sin(rad); float r2=dot(q,q); if(c<0.0||r2>1.0) return vec3(-1.0);
+  vec3 n=normalize(q+md*sqrt(1.0-r2)); float tex=0.72+0.4*fbm3(n*3.0+seed)-0.3*smoothstep(0.56,0.62,fbm3(n*8.0+seed*2.0));
+  return alb*tex*(max(dot(n,sunDir),0.0)*1.5+0.025); }
+void main(){ vec3 d=normalize(vDir); vec3 dd=d; dd.y=max(dd.y,0.004);
+  vec3 c=atmosphere(normalize(dd),sunDir,22.0)*scale;
+  float lum=dot(c,vec3(0.3,0.5,0.2));
+  float st=smoothstep(0.996,1.0,h3(floor(d*640.0)))*0.5+smoothstep(0.9993,1.0,h3(floor(d*320.0)+3.0))*1.8;
+  c+=st*smoothstep(0.1,0.01,lum)*smoothstep(0.02,0.25,d.y)*vec3(0.9,0.85,1.0);
+  vec3 m=moonDisk(d,moonDir,0.15,vec3(0.86,0.72,0.82),1.0); if(m.x>=0.0) c=c*0.3+m;
+  vec3 m2=moonDisk(d,moon2Dir,0.04,vec3(0.6,0.78,0.95),5.0); if(m2.x>=0.0) c=c*0.3+m2;
+  float mu=dot(d,sunDir); c+=vec3(1.0,0.78,0.55)*smoothstep(0.9991,0.9996,mu)*60.0*step(0.0,d.y);
+  c=mix(c,ground,smoothstep(0.0,-0.08,d.y)*groundMix);
+  gl_FragColor=vec4(c,1.0); }`;
 function bakeCube(fs,uniforms,size){
   const s=new THREE.Scene(), m=new THREE.Mesh(new THREE.SphereGeometry(10,64,32),new THREE.ShaderMaterial({side:THREE.BackSide,depthWrite:false,uniforms,vertexShader:SKYBAKE_VS,fragmentShader:fs}));
   s.add(m);
@@ -517,17 +539,25 @@ const ENV={};
 {
   const pm=new THREE.PMREMGenerator(renderer);
   // planet: sky for the background, the same sky over dark ground for reflections
-  const bg=bakeCube(SKY_FS,{sunDir:{value:SUN_PLANET},scale:{value:SKY_SCALE},ground:{value:new THREE.Color(0,0,0)},groundMix:{value:0}},LOWQ?256:512);
-  const envRT=bakeCube(SKY_FS,{sunDir:{value:SUN_PLANET},scale:{value:SKY_SCALE},ground:{value:lin('#2b3524')},groundMix:{value:1}},128);
+  const air=(KR,KA)=>({K_RLH:{value:new V3(...KR)},K_ABS:{value:new V3(...KA)}});
+  const bg=bakeCube(SKY_FS,{sunDir:{value:SUN_PLANET},scale:{value:SKY_SCALE},ground:{value:new THREE.Color(0,0,0)},groundMix:{value:0},...air(KR_EARTH,KA_EARTH)},LOWQ?256:512);
+  const envRT=bakeCube(SKY_FS,{sunDir:{value:SUN_PLANET},scale:{value:SKY_SCALE},ground:{value:lin('#2b3524')},groundMix:{value:1},...air(KR_EARTH,KA_EARTH)},128);
   const f=atmosJS(new V3(0,.035,-1).normalize(),SUN_PLANET,22), tr=sunTransmittance(SUN_PLANET);
   ENV.planet={background:bg.texture,environment:pm.fromCubemap(envRT.texture).texture,sunDir:SUN_PLANET,
     fogColor:new THREE.Color(f[0]*SKY_SCALE,f[1]*SKY_SCALE,f[2]*SKY_SCALE),fogNear:40,fogFar:1500,
-    sunColor:new THREE.Color(tr[0],tr[1],tr[2]),sunI:3.1,hemiI:.12,rimI:0,exposure:.8};
+    sunColor:new THREE.Color(tr[0],tr[1],tr[2]),sunI:3.1,hemiI:.12,rimI:0,exposure:.8,surface:true};
+  // Nyaruga: violet dusk, two moons; the lava sea lights everything from below (warm hemisphere ground, orange rim)
+  { const u=g=>({sunDir:{value:SUN_NYARUGA},scale:{value:SKY_SCALE},ground:{value:g||new THREE.Color(0,0,0)},groundMix:{value:g?1:0},moonDir:{value:new V3(.36,.3,-.88).normalize()},moon2Dir:{value:new V3(-.08,.52,-.85).normalize()},...air(KR_NYARUGA,KA_NYARUGA)});
+    const nbg=bakeCube(NYA_SKY_FS,u(null),LOWQ?256:512), nenv=bakeCube(NYA_SKY_FS,u(lin('#2a1410')),128);
+    const nf=atmosJS(new V3(0,.035,-1).normalize(),SUN_NYARUGA,22,KR_NYARUGA,KA_NYARUGA), ntr=sunTransmittance(SUN_NYARUGA,KR_NYARUGA,KA_NYARUGA);
+    ENV.nyaruga={background:nbg.texture,environment:pm.fromCubemap(nenv.texture).texture,sunDir:new V3(-.5,.42,-.76).normalize(),
+      fogColor:new THREE.Color(nf[0]*SKY_SCALE,nf[1]*SKY_SCALE,nf[2]*SKY_SCALE),fogNear:30,fogFar:1350,
+      sunColor:new THREE.Color(ntr[0],ntr[1],ntr[2]),sunI:2.8,hemiI:.3,hemiSky:lin('#9a7ad8'),hemiGround:lin('#a33a12'),rimI:.9,rimColor:lin('#ff5a1c'),exposure:.9,surface:true}; }
   // space
   const sp=bakeCube(SPACE_FS,{},LOWQ?512:1024);
   // key light is cheated round toward the camera so rocks and hulls read half-lit, not as silhouettes
   ENV.space={background:sp.texture,environment:pm.fromCubemap(sp.texture).texture,sunDir:new V3(.6,.52,.14).normalize(),
-    fogColor:new THREE.Color(0,0,.0015),fogNear:420,fogFar:1150,sunColor:lin('#fff4e8'),sunI:3.2,hemiI:.06,rimI:.6,exposure:.95};
+    fogColor:new THREE.Color(0,0,.0015),fogNear:420,fogFar:1150,sunColor:lin('#fff4e8'),sunI:3.2,hemiI:.06,rimI:.6,exposure:.95,surface:false};
   pm.dispose();
 }
 scene.fog=new THREE.Fog(0x000000,100,1000);
@@ -564,7 +594,7 @@ const G={
 /* ---------- terrain: streamed chunks over a height field ---------- */
 const GROUND=.8;
 function zoneMix(s){ return {sea:1-smooth(1000,1180,s),city:smooth(1150,1300,s)*(1-smooth(2500,2650,s)),canyon:smooth(3550,3750,s)*(1-smooth(5000,5200,s))}; }
-function terrainH(x,z){
+function terrainH1(x,z){
   const s=-z, ax=Math.abs(x), Z=zoneMix(s);
   const base=lerp(GROUND+(vnoise(x*.08,z*.08)-.5)*.3,-7,Z.sea);
   let hills=8+fbm(x*.0042+11.3,z*.0042+3.1)*118;
@@ -602,7 +632,7 @@ const TEX_GRASS=surfTex((()=>{ const S=512, c=document.createElement('canvas'); 
 const _rc=new THREE.Color();
 const TINT={canyon:lin('#c46a40'),dust:lin('#e6ad74'),road:lin('#595f68'),snow:new THREE.Color(2.4,2.45,2.55)};
 /* per-vertex tint (large-scale colour variation) and splat weights (grass, rock, sand) */
-function terrainSurf(tint,w,x,z,h,ny){
+function terrainSurf1(tint,w,x,z,h,ny){
   const s=-z, ax=Math.abs(x), Z=zoneMix(s), v=vnoise(x*.018,z*.018), v2=vnoise(x*.06+9,z*.06);
   tint.setRGB(.78+.42*v+.1*v2,.84+.3*v+.08*v2,.78+.22*v);
   let r=Math.max(1-smooth(.6,.86,ny),smooth(58,92,h)), sd=(1-smooth(1.2,3.4,h))*(1-smooth(1150,1280,s));
@@ -613,6 +643,33 @@ function terrainSurf(tint,w,x,z,h,ny){
   const snow=smooth(118,150,h)*(1-Z.canyon); if(snow>0){ sd=Math.max(sd,snow); tint.lerp(TINT.snow,snow); }
   w[0]=(1-r)*(1-sd); w[1]=r; w[2]=sd*(1-r*.5);
 }
+/* stage 3, Nyaruga: a lava channel between volcanic ridges, the fortress flats, a sheer gorge, then the palace plaza */
+function zone3Mix(s){ return {lava:1-smooth(1450,1620,s),gorge:smooth(3550,3750,s)*(1-smooth(5150,5350,s)),plaza:smooth(5250,5500,s)}; }
+function terrainH3(x,z){
+  const s=-z, ax=Math.abs(x), Z=zone3Mix(s);
+  const base=lerp(GROUND+(vnoise(x*.08,z*.08)-.5)*.4,-6,Z.lava);
+  const ridge=1-Math.abs(fbm(x*.0055+4.1,z*.0055+1.3)*2-1);
+  let hills=10+Math.pow(ridge,1.7)*150+fbm(x*.03,z*.03)*12;
+  hills*=(.3+.7*smooth(60,420,ax))*(1-Z.plaza*.45);
+  const wall=(72+Math.pow(ridge,1.2)*70+fbm(x*.02+5,z*.02)*30)*smooth(44,60,ax);
+  hills=lerp(hills,Math.max(hills,wall),Z.gorge);
+  const side=smooth(44,44+lerp(lerp(lerp(90,60,Z.lava),18,Z.gorge),150,Z.plaza),ax);
+  return lerp(base,hills,side);
+}
+const TINT3={basalt:lin('#6a5470'),ash:lin('#50444e'),scorch:lin('#8a3016'),slab:lin('#3c3448')};
+function terrainSurf3(tint,w,x,z,h,ny){
+  const s=-z, ax=Math.abs(x), Z=zone3Mix(s), v=vnoise(x*.02,z*.02), v2=vnoise(x*.07+3,z*.07);
+  tint.copy(TINT3.basalt).multiplyScalar(.75+.45*v+.15*v2);
+  let r=Math.max(1-smooth(.6,.88,ny),smooth(40,80,h)); r=clamp(r+Z.gorge*smooth(46,58,ax),0,1);
+  const sd=1-r;
+  tint.lerp(TINT3.ash,sd*.6);
+  tint.lerp(TINT3.scorch,Z.lava*(1-smooth(-.5,4,h))*.85);   // rock licked by the lava along the shore
+  const slab=(1-Z.lava)*(1-Z.gorge)*(1-smooth(40,52,ax)); if(slab>0) tint.lerp(TINT3.slab,slab*.8);
+  w[0]=0; w[1]=r; w[2]=sd;
+}
+const TERR1={h:terrainH1,surf:terrainSurf1}, TERR3={h:terrainH3,surf:terrainSurf3};
+let TERR=TERR1, surface=true;   // surface: a world with ground under the ship (stages 1 and 3)
+const terrainH=(x,z)=>TERR.h(x,z);
 const TRIPLANAR_ROCK_GLSL=`
 vec3 decS(vec3 c){ return pow(c,vec3(2.2)); }
 vec3 triRock(sampler2D t,vec3 p,vec3 n,float sc){ vec3 bw=pow(abs(n),vec3(4.0)); bw/=bw.x+bw.y+bw.z;
@@ -648,7 +705,7 @@ function fillChunk(m,k){
       const hx=(terrainH(x+e,z)-terrainH(x-e,z))/(2*e), hz=(terrainH(x,z+e)-terrainH(x,z-e))/(2*e);
       const il=1/Math.sqrt(hx*hx+1+hz*hz), ny=il;
       P[v*3]=x; P[v*3+1]=h; P[v*3+2]=z; N[v*3]=-hx*il; N[v*3+1]=ny; N[v*3+2]=-hz*il;
-      terrainSurf(_c,wt,x,z,h,ny); C[v*3]=_c.r; C[v*3+1]=_c.g; C[v*3+2]=_c.b; S[v*3]=wt[0]; S[v*3+1]=wt[1]; S[v*3+2]=wt[2]; } }
+      TERR.surf(_c,wt,x,z,h,ny); C[v*3]=_c.r; C[v*3+1]=_c.g; C[v*3+2]=_c.b; S[v*3]=wt[0]; S[v*3+1]=wt[1]; S[v*3+2]=wt[2]; } }
   for(const a of ['position','normal','color','splat']) g.attributes[a].needsUpdate=true;
   g.computeBoundingSphere(); m.visible=true;
 }
@@ -659,7 +716,7 @@ function newChunk(){
   const m=new THREE.Mesh(g,terrMat); m.receiveShadow=true; scene.add(m); return m;
 }
 function updateTerrain(all){
-  if(envName!=='planet') return;
+  if(!surface) return;
   const sc=-camera.position.z, ka=Math.floor((sc-260)/CH_LEN), kb=Math.floor((sc+1550)/CH_LEN);
   for(const [k,m] of chunks) if(k<ka||k>kb){ chunks.delete(k); m.visible=false; freeChunks.push(m); }
   let built=0;
@@ -677,6 +734,10 @@ waterMat.onBeforeCompile=sh=>{
     normal=perturbNormal2Arb(-vViewPosition,normal,mapN,faceDirection);`);
 };
 TEX_WATERN.repeat.set(150,150);
+/* lava: dark crust over glowing cracks (emissive, so it blooms), scrolled and pulsed in step() */
+const TEX_LAVA=(()=>{ const t=surfTex(texFromFn(256,(u,v)=>{ const n=tileFbm(u,v,4,4), cr=Math.pow(1-Math.abs(tileFbm(u+.21,v+.43,6,4)*2-1),7), hot=clamp(cr*1.5+smooth(.62,.8,n)*.6,0,1);
+  return [255*hot,255*Math.pow(hot,1.8)*.55,255*Math.pow(hot,3)*.18]; })); t.encoding=THREE.sRGBEncoding; t.repeat.set(70,70); return t; })();
+const LAVA_MAT=new THREE.MeshStandardMaterial({color:lin('#1c0d0a'),roughness:.9,metalness:0,emissive:new THREE.Color(1,1,1),emissiveMap:TEX_LAVA,emissiveIntensity:3.2,envMapIntensity:.3});
 const water=new THREE.Mesh(new THREE.PlaneGeometry(4200,4200),waterMat); water.rotation.x=-Math.PI/2; water.receiveShadow=true; scene.add(water);
 /* distant ranges and clouds ride with the camera */
 const far=new THREE.Group(); scene.add(far);
@@ -693,6 +754,35 @@ const far=new THREE.Group(); scene.add(far);
   }
   for(let i=0;i<24;i++){ const s=new THREE.Sprite(new THREE.SpriteMaterial({map:TEX_CLOUD,color:hdr('#ffffff',1.25),fog:false,transparent:true,depthWrite:false,opacity:rand(.75,1)}));
     const w=rand(360,900), lo=i<8; s.scale.set(w,w*.45,1); s.position.set(rand(-2400,2400),lo?rand(150,260):rand(300,650),lo?rand(-1800,-1300):rand(-2400,-1600)); far.add(s); }
+}
+/* Nyaruga's horizon: jagged volcanic ranges, a smoking volcano, and the emperor's palace as a lit silhouette */
+const farN=new THREE.Group(); farN.visible=false; scene.add(farN);
+{
+  const fogc=ENV.nyaruga.fogColor;
+  const hazeMat=new THREE.MeshStandardMaterial({vertexColors:true,roughness:1,metalness:0,fog:false,emissive:fogc.clone().multiplyScalar(.32)});
+  for(let i=0;i<20;i++){
+    const g=new THREE.ConeGeometry(1,1,40,12,true); const p=g.attributes.position, cols=[]; const seed=rand(0,99);
+    for(let v=0;v<p.count;v++){ const x=p.getX(v),y=p.getY(v)+.5,z=p.getZ(v); const r=1+(fbm(x*2.2+seed,z*2.2+y*3)-.5)*1.1+(vnoise(x*9+seed,y*12)-.5)*.2;
+      p.setXYZ(v,x*r,y-.5,z*r); _c.copy(fogc).multiplyScalar(.28).lerp(lin('#1a1020'),.5); cols.push(_c.r,_c.g,_c.b); }
+    g.setAttribute('color',new THREE.Float32BufferAttribute(cols,3)); g.computeVertexNormals(); g.translate(0,.5,0);
+    const m=new THREE.Mesh(g,hazeMat); m.scale.set(rand(200,420),rand(240,560),rand(180,300));
+    m.position.set(-2700+i*285+rand(-70,70),-10,-2150+rand(-150,150)); if(Math.abs(m.position.x)<420) m.scale.y*=.45; farN.add(m);
+  }
+  const volc=new THREE.Mesh(new THREE.ConeGeometry(1,1,40,1,true).translate(0,.5,0),hazeMat); volc.scale.set(520,420,380); volc.position.set(-1500,-10,-2000); farN.add(volc);
+  const vg=glowSprite(hdr('#ff6a1a',6),260); vg.position.set(-1500,420,-1990); farN.add(vg);
+  for(let i=0;i<6;i++){ const sm=new THREE.Sprite(new THREE.SpriteMaterial({map:TEX_SMOKE,color:lin('#3a2430'),fog:false,transparent:true,depthWrite:false,opacity:.8}));
+    const w=260+i*90; sm.scale.set(w,w,1); sm.position.set(-1500+i*70,500+i*130,-2000); farN.add(sm); }
+  // palace: a ring of towers around a great keep, cat-ear roofs, glowing windows
+  const sil=new THREE.MeshBasicMaterial({color:fogc.clone().multiplyScalar(.2),fog:false}), lit=B('#ff6ad8',4,{fog:false}), red=B('#ff3050',6,{fog:false});
+  const pal=new THREE.Group(); pal.position.set(0,-10,-2050); farN.add(pal);
+  const tower=(x,w,h,ears)=>{ const t=new THREE.Mesh(G.box,sil); t.scale.set(w,h,w); t.position.set(x,h/2,0); pal.add(t);
+    const roof=new THREE.Mesh(G.cone,sil); roof.scale.set(w*.75,w*1.2,w*.75); roof.position.set(x,h+w*.6,0); pal.add(roof);
+    if(ears) for(const s of [-1,1]){ const e=new THREE.Mesh(G.cone,sil); e.scale.set(w*.3,w*.9,w*.3); e.position.set(x+s*w*.32,h+w*.4,0); e.rotation.z=-s*.25; pal.add(e); }
+    for(let k=0;k<Math.floor(h/26);k++){ const wv=new THREE.Mesh(G.box,lit); wv.scale.set(w*.5,2.2,1); wv.position.set(x,18+k*26,w/2+.6); pal.add(wv); }
+    const tip=glowSprite(hdr('#ff3050',5),26,{fog:false}); tip.position.set(x,h+w*1.25,0); pal.add(tip); };
+  tower(0,90,330,true); for(const s of [-1,1]){ tower(s*110,46,230,false); tower(s*190,38,170,true); tower(s*270,30,120,false); }
+  const wall=new THREE.Mesh(G.box,sil); wall.scale.set(640,70,30); wall.position.set(0,35,40); pal.add(wall);
+  const eye=new THREE.Mesh(G.box,red); eye.scale.set(30,5,1); eye.position.set(0,250,46); pal.add(eye);
 }
 /* instanced scatter for vegetation & rocks (ring buffer, recycled in spawn order) */
 function scatter(geo,mat,cap){
@@ -750,11 +840,16 @@ const SC={
   pine:scatter(PINE_GEO,M('#ffffff',{r:.85,vc:1}),260),
   round:scatter(ROUND_GEO,M('#ffffff',{r:.8,vc:1}),260),
   rock:scatter(blobGeo(2,.75,7.1),M('#ffffff',{r:.9}),220),
+  crystal:scatter((()=>{ const parts=[]; [[0,0,0,1,1],[.45,0,.2,.6,.65],[-.4,0,-.25,.55,.5],[.1,0,-.45,.45,.4]].forEach(([x,y,z,r,h],i)=>{
+      const g=new THREE.OctahedronGeometry(1,0); g.scale(r*.45,h*1.6,r*.45); g.translate(0,h*1.2,0); g.rotateZ((i-1.5)*.18); g.rotateX((i%2-.5)*.25); g.translate(x,y,z); parts.push(g); });
+    return mergeGeos(parts.map(g=>{ g.computeVertexNormals(); return g; })); })(),
+    new THREE.MeshStandardMaterial({color:lin('#d8a8ff'),emissive:lin('#8a2cff'),emissiveIntensity:1.8,roughness:.2,metalness:.1,vertexColors:true}),200),
   ast:scatter(AST_GEOS[0],AST_MAT,420),
   ast2:scatter(AST_GEOS[1],AST_MAT,420),
 };
-SC.ast.m.visible=SC.ast2.m.visible=false;
+SC.ast.m.visible=SC.ast2.m.visible=SC.crystal.m.visible=false;
 const LEAF=[lin('#2c6e2c'),lin('#3a8435'),lin('#4f9338'),lin('#265f33'),lin('#5b8a2f')], ROCKC=[lin('#8c8580'),lin('#a39a90'),lin('#7a746f')];
+const ROCKC3=[lin('#3e3240'),lin('#4a3a44'),lin('#302832')], CRYC=[lin('#ffffff'),lin('#ffc6f0'),lin('#c8d0ff')];
 const ASTC=[lin('#8a7f74'),lin('#6f6862'),lin('#9a8a78'),lin('#5f5852'),lin('#7d6a5a')];
 function plantTree(x,z,s){
   const y=terrainH(x,z); if(y<.6) return plantRock(x,z,rand(2,5));
@@ -764,7 +859,8 @@ function plantTree(x,z,s){
   if(pine) scAdd(SC.pine,x,y,z,2.5*s,h*1.05,2.5*s,rand(0,TAU),leaf);
   else { const r=rand(3.2,4.6)*s; scAdd(SC.round,x,y+h*.32,z,r*1.55,r*1.5,r*1.55,rand(0,TAU),leaf); }
 }
-function plantRock(x,z,s){ const y=terrainH(x,z); scAdd(SC.rock,x,y+s*.15,z,s,s*rand(.5,.9),s*rand(.8,1.2),rand(0,TAU),ROCKC[(Math.random()*3)|0]); }
+function plantRock(x,z,s){ const y=terrainH(x,z); scAdd(SC.rock,x,y+s*.15,z,s,s*rand(.5,.9),s*rand(.8,1.2),rand(0,TAU),(envName==='nyaruga'?ROCKC3:ROCKC)[(Math.random()*3)|0]); }
+function plantCrystal(x,z,s){ const y=terrainH(x,z); if(y<.3) return plantRock(x,z,s*1.4); scAdd(SC.crystal,x,y-.5,z,s,s*rand(1.2,2.4),s,rand(0,TAU),CRYC[(Math.random()*3)|0]); }
 function plantAsteroid(x,y,z,s){ const sc=Math.random()<.5?SC.ast:SC.ast2; _q.setFromEuler(new THREE.Euler(rand(0,TAU),rand(0,TAU),rand(0,TAU)));
   _mtx.compose(_v1.set(x,y,z),_q,_s.set(s,s,s)); sc.m.setMatrixAt(sc.i,_mtx); sc.m.setColorAt(sc.i,ASTC[(Math.random()*ASTC.length)|0]); sc.i=(sc.i+1)%sc.cap; sc.dirty=true; }
 
@@ -868,10 +964,10 @@ const FIGHTER_GEO=(()=>{
   const wing=blade([[0,-.4],[3.5,-1.7],[3.75,-1.15],[0,1.05]],.05,.07); wing.rotateX(Math.PI/2);
   return {wing};
 })();
-function buildFighter(gold){
+function buildFighter(gold,elite){ // elite: the emperor's guard on Nyaruga, black and crimson
   const g=new THREE.Group();
-  const body=gold?M('#ffcf5a',{r:.2,m:1}):M('#3b2162',{r:.3,m:.55,cc:1});
-  const wingM=gold?M('#ffe39a',{r:.22,m:1}):M('#c33b78',{r:.3,m:.35,cc:1});
+  const body=gold?M('#ffcf5a',{r:.2,m:1}):elite?M('#17121e',{r:.24,m:.75,cc:1}):M('#3b2162',{r:.3,m:.55,cc:1});
+  const wingM=gold?M('#ffe39a',{r:.22,m:1}):elite?M('#b0123a',{r:.28,m:.45,cc:1}):M('#c33b78',{r:.3,m:.35,cc:1});
   const b=new THREE.Mesh(G.sphere,body); b.scale.set(1.05,.62,2.3); g.add(b);
   const cab=new THREE.Mesh(G.sphere,M('#1a0710',{r:.05,m:.9,cc:1})); cab.scale.set(.48,.36,.85); cab.position.set(0,.42,.55); g.add(cab);
   for(const s of [-1,1]){
@@ -879,8 +975,8 @@ function buildFighter(gold){
     const ear=new THREE.Mesh(G.cone,body); ear.scale.set(.42,1.25,.42); ear.position.set(s*.48,.85,-.55); ear.rotation.z=-s*.35; g.add(ear);
     const tail=new THREE.Mesh(G.sphere,M('#1a1424',{r:.4,m:.6})); tail.scale.set(.24,.24,.9); tail.position.set(s*.55,-.1,-2); g.add(tail);
   }
-  const eye=new THREE.Mesh(G.sphereLo,B(gold?'#fff2a0':'#ff2d55',6)); eye.scale.setScalar(.2); eye.position.set(0,.18,2.22); g.add(eye);
-  const eg=glowSprite(gold?'#fff2a0':'#ff3355',1.6); eg.position.set(0,.18,2.3); g.add(eg);
+  const eye=new THREE.Mesh(G.sphereLo,B(gold?'#fff2a0':elite?'#8dff5a':'#ff2d55',6)); eye.scale.setScalar(.2); eye.position.set(0,.18,2.22); g.add(eye);
+  const eg=glowSprite(gold?'#fff2a0':elite?'#8dff5a':'#ff3355',1.6); eg.position.set(0,.18,2.3); g.add(eg);
   const ex=glowSprite('#ff4fd0',1.9); ex.position.set(0,0,-2.4); g.add(ex);
   return shadowy(g,true,false);
 }
@@ -906,8 +1002,8 @@ function buildMine(){
   g.add(glowSprite('#ff3050',5.5));
   return shadowy(g,true,false);
 }
-const FIGHTER=buildFighter(false), FIGHTER_GOLD=buildFighter(true), TURRET=buildTurret(), MINE=buildMine();
-FIGHTER.scale.setScalar(1.25); FIGHTER_GOLD.scale.setScalar(1.3);
+const FIGHTER=buildFighter(false), FIGHTER_GOLD=buildFighter(true), FIGHTER_ELITE=buildFighter(false,true), TURRET=buildTurret(), MINE=buildMine();
+FIGHTER.scale.setScalar(1.25); FIGHTER_GOLD.scale.setScalar(1.3); FIGHTER_ELITE.scale.setScalar(1.4);
 const MAT_SILVER=M('#eef1f6',{r:.14,m:1,env:1.4}), MAT_GOLD=M('#ffc94a',{r:.18,m:1,env:1.4});
 const MAT_CP=new THREE.MeshStandardMaterial({color:lin('#8fe6ff'),emissive:hdr('#5fd8ff',2.2),roughness:.2,metalness:.5});
 /* city blocks with window textures */
@@ -1169,8 +1265,9 @@ const DRUM={
     g.gain.setValueAtTime(v,t); g.gain.exponentialRampToValueAtTime(.0001,t+.4); o.connect(g); o.start(t); o.stop(t+.45); route(g,.25); },
 };
 /* score helpers: 16 steps per bar; each step holds [instrument, midi, lengthInSteps, volume, options] */
-const PC={C:0,'C#':1,D:2,'D#':3,Eb:3,E:4,F:5,'F#':6,G:7,'G#':8,A:9,Bb:10,B:11};
-const CH={Dm:['D','F','A'],Bb:['Bb','D','F'],C:['C','E','G'],Gm:['G','Bb','D'],A:['A','C#','E'],Am:['A','C','E'],F:['F','A','C'],G:['G','B','D'],Em:['E','G','B'],D:['D','F#','A'],B:['B','D#','F#'],E:['E','G#','B']};
+const PC={C:0,'C#':1,Db:1,D:2,'D#':3,Eb:3,E:4,F:5,'F#':6,G:7,'G#':8,Ab:8,A:9,Bb:10,B:11};
+const CH={Dm:['D','F','A'],Bb:['Bb','D','F'],C:['C','E','G'],Gm:['G','Bb','D'],A:['A','C#','E'],Am:['A','C','E'],F:['F','A','C'],G:['G','B','D'],Em:['E','G','B'],D:['D','F#','A'],B:['B','D#','F#'],E:['E','G#','B'],
+  Cm:['C','Eb','G'],Ab:['Ab','C','Eb'],Eb:['Eb','G','Bb'],Fm:['F','Ab','C'],Db:['Db','F','Ab']};
 const voice=(c,lo)=>CH[c].map(n=>{ let m=PC[n]; while(m<lo) m+=12; return m; }).sort((a,b)=>a-b);
 const root=(c,lo)=>{ let m=PC[CH[c][0]]; while(m<lo) m+=12; return m; };
 const score=bars=>Array.from({length:bars*16},()=>[]);
@@ -1215,6 +1312,15 @@ const S2_A=[['E5',6],['D5',2],['C5',4],['A4',4], ['C5',6],['D5',2],['E5',4],['F5
   ['E5',6],['D5',2],['C5',2],['D5',2],['E5',4], ['A5',6],['G5',2],['F5',4],['E5',4], ['F5',6],['E5',2],['D5',4],['A4',4], ['B4',8],['G#4',4],['E5',4]];
 const S2_B=[['A5',4],['C6',8],['B5',2],['A5',2], ['G5',4],['B5',8],['A5',2],['G5',2], ['E5',6],['G5',2],['B5',4],['A5',4], ['A5',12],['-',4],
   ['F5',2],['A5',2],['C6',4],['B5',4],['A5',4], ['G5',2],['B5',2],['D6',4],['C6',4],['B5',4], ['B5',4],['G#5',4],['E5',4],['G#5',4], ['B5',12],['-',4]];
+/* --- stage 3 theme "Nyaruga Assault": C minor, 156 bpm, a darker march for the enemy's home world --- */
+const S3_CALL=[['C4',3],['C4',1],['Eb4',2],['G4',10], ['Ab4',3],['G4',1],['F4',2],['Eb4',4],['D4',6], ['C4',3],['Eb4',1],['G4',2],['C5',10], ['B4',4],['D5',4],['F5',4],['G5',4]];
+const S3_A=[['G4',4],['C5',6],['D5',2],['Eb5',4], ['F5',6],['Eb5',2],['D5',4],['C5',4], ['Bb4',6],['C5',2],['D5',4],['Eb5',4], ['F5',12],['D5',4],
+  ['G5',6],['F5',2],['Eb5',4],['C5',4], ['Ab5',6],['G5',2],['F5',4],['Eb5',4], ['F5',4],['Ab5',4],['C6',4],['Ab5',4], ['G5',8],['B4',4],['D5',4]];
+const S3_B=[['Eb5',4],['Ab5',8],['G5',2],['F5',2], ['F5',4],['Bb5',8],['Ab5',2],['G5',2], ['G5',6],['F5',2],['D5',4],['Bb4',4], ['C5',12],['-',4],
+  ['C5',2],['Eb5',2],['Ab5',4],['G5',4],['Eb5',4], ['D5',2],['F5',2],['Bb5',4],['Ab5',4],['F5',4], ['G5',4],['B5',4],['D6',4],['B5',4], ['G5',12],['-',4]];
+/* --- final boss theme "Giga Nyaruga": C minor, 172 bpm, a Neapolitan D-flat over a pounding bass --- */
+const BS3_MEL=[['C4',6],['Db4',2],['C4',4],['G3',4], ['C4',4],['Eb4',4],['F4',4],['Gb4',4], ['F4',6],['Eb4',2],['Db4',4],['C4',4], ['C4',12],['-',4],
+  ['Eb4',6],['F4',2],['Ab4',4],['G4',4], ['F4',6],['G4',2],['Bb4',4],['Ab4',4], ['G4',6],['Ab4',2],['B4',4],['D5',4], ['G5',8],['F5',4],['D5',4]];
 function buildSongs(){
   const stage=(()=>{ const intro=score(4), loop=score(16);
     line(intro,0,ST_FANFARE,'brass',.16,{wet:.45}); line(intro,0,ST_FANFARE,'brass',.08,{wet:.45},-12);
@@ -1253,7 +1359,25 @@ function buildSongs(){
     line(loop,128,S2_B,'brass',.15,{wet:.45}); line(loop,128,S2_B,'brass',.05,{wet:.45},-12);
     section(loop,8,['F','G','Em','Am','F','G','E','E'],{pad:.055,horns:.026,bass:[0,0,12,0,0,7,12,7],arp:.03,drums:rockKit,timp:i=>i%2===0});
     return {bpm:140,intro,loop}; })();
-  return {stage,stage2,boss,win,lose};
+  const stage3=(()=>{ const intro=score(4), loop=score(16);
+    line(intro,0,S3_CALL,'brass',.15,{wet:.5}); line(intro,0,S3_CALL,'brass',.07,{wet:.5},-12);
+    section(intro,0,['Cm','Ab','Cm','G'],{pad:.05,timp:()=>true,timpV:.55});
+    for(const b of [0,1,2]) put(intro,b*16+8,'timp',36,8,.35);
+    for(let k=0;k<16;k++) put(intro,48+k,'s',0,0,.06+k*.025); put(intro,0,'c',0,0,.3);
+    line(loop,0,S3_A,'brass',.15,{wet:.38}); line(loop,0,S3_A,'brass',.06,{wet:.38},-12);
+    section(loop,0,['Cm','Ab','Eb','Bb','Cm','Ab','Fm','G'],{pad:.045,bass:[0,0,12,0,0,7,12,7],arp:.03,drums:rockKit,timp:i=>i%4===0});
+    line(loop,128,S3_B,'brass',.16,{wet:.42}); line(loop,128,S3_B,'brass',.055,{wet:.42},-12);
+    section(loop,8,['Ab','Bb','Gm','Cm','Ab','Bb','G','G'],{pad:.055,horns:.028,bass:[0,0,12,0,0,7,12,7],arp:.025,drums:rockKit,timp:i=>i%2===0});
+    return {bpm:156,intro,loop}; })();
+  const boss3=(()=>{ const intro=score(2), loop=score(8), ch=['Cm','Cm','Db','Cm','Ab','Bb','G','G'];
+    section(intro,0,['Cm','Db'],{pad:.055,timp:()=>true,timpV:.6});
+    for(const st of [0,3,6,16,19,22]) for(const m of voice(st<16?'Cm':'Db',50)) put(intro,st,'brass',m,2,.06,{wet:.3});
+    for(let k=0;k<16;k++) put(intro,16+k,'s',0,0,.08+k*.024);
+    line(loop,0,BS3_MEL,'brass',.16,{wet:.3}); line(loop,0,BS3_MEL,'brass',.08,{wet:.3},-12);
+    section(loop,0,ch,{pad:.05,bass:[0,0,12,0,0,0,12,0,0,0,12,0,0,12,7,0],bv:.12,drums:bossKit,timp:i=>i%2===0,timpV:.55});
+    ch.forEach((c,i)=>{ for(const m of voice(c,60)) for(const k of [0,6,12]) put(loop,i*16+k,'brass',m,2,.04,{wet:.25}); });
+    return {bpm:172,intro,loop}; })();
+  return {stage,stage2,stage3,boss,boss3,win,lose};
 }
 let SONGS=null;
 const music={cur:null,part:'intro',step:0,next:0};
@@ -1378,7 +1502,7 @@ function updateFX(dt){
   for(const r of rings.items){ if(!r.active) continue; r.t+=dt; const k=r.t/r.dur; if(k>=1){ release(r); continue; } const s=r.size*easeOut(k); r.mesh.scale.set(s,s,1); r.mesh.material.opacity=1-k; r.mesh.position.addScaledVector(r.vel,dt); }
   for(const d of debris.items){ if(!d.active) continue; d.life-=dt; if(d.life<=0){ release(d); continue; }
     d.vel.y-=30*dt; d.mesh.position.addScaledVector(d.vel,dt); d.mesh.rotation.x+=d.spin.x*dt; d.mesh.rotation.y+=d.spin.y*dt;
-    if(envName==='planet'&&d.mesh.position.y<GROUND+.2){ d.mesh.position.y=GROUND+.2; d.vel.y*=-.4; d.vel.x*=.7; d.vel.z*=.7; }
+    if(surface&&d.mesh.position.y<GROUND+.2){ d.mesh.position.y=GROUND+.2; d.vel.y*=-.4; d.vel.x*=.7; d.vel.z*=.7; }
     if(Math.random()<dt*14) smoke(d.mesh.position,.35,null,null,.6); }
   shake=Math.max(0,shake-dt); fxRed=Math.max(0,fxRed-dt*1.6); fxWhite=Math.max(0,fxWhite-dt*1.4);
 }
@@ -1403,7 +1527,7 @@ function proj(v){ _v3.copy(v).project(camera); return {x:(_v3.x+1)/2*W,y:(1-_v3.
 function addEnt(e){ if(e.mesh&&!e.mesh.parent) scene.add(e.mesh); ents.push(e); return e; }
 function addFighter(path,o){
   o=o||{};
-  const mesh=(o.gold?FIGHTER_GOLD:FIGHTER).clone(); mesh.visible=false;
+  const mesh=(o.gold?FIGHTER_GOLD:o.elite?FIGHTER_ELITE:FIGHTER).clone(); mesh.visible=false;
   const e={type:'enemy',mesh,pos:mesh.position,r:2.8,hp:o.hp||1,score:o.score||1,t:-(o.delay||0),path,fireAt:(o.fireAt||[]).slice(),
     hittable:true,wvel:new V3(),boom:1,drop:o.drop||null,rel:true,bank:0};
   e.collide=(e,p)=>{ damage(p,15); killEnemy(e,p); };
@@ -1415,7 +1539,7 @@ function addFighter(path,o){
     const px=e.wvel.x; e.wvel.subVectors(e.pos,_v1).divideScalar(Math.max(dt,1e-4));
     e.bank=damp(e.bank,clamp(-(e.wvel.x-px)*.02-e.wvel.x*.012,-1.1,1.1),4,dt);
     if(e.wvel.lengthSq()>1){ _v2.copy(e.pos).add(e.wvel); mesh.lookAt(_v2); mesh.rotateZ(e.bank); }
-    while(e.fireAt.length&&e.t>=e.fireAt[0]){ e.fireAt.shift(); if(e.pos.z<railZ-45) enemyShoot(e.pos); }
+    while(e.fireAt.length&&e.t>=e.fireAt[0]){ e.fireAt.shift(); if(e.pos.z<railZ-45){ if(o.elite) for(const yaw of [-.13,0,.13]) enemyShoot(e.pos,{yaw,silent:yaw!==0}); else enemyShoot(e.pos); } }
   };
   return addEnt(e);
 }
@@ -1475,15 +1599,15 @@ function dropItem(kind,pos){
 }
 
 /* scenery */
-function addBuilding(x,z,w,h,d,solid){
+function addBuilding(x,z,w,h,d,solid,mats){
   const y=solid?GROUND:terrainH(x,z)-1;
-  const wall=BUILD_MATS[(Math.random()*BUILD_MATS.length)|0];
+  mats=mats||BUILD_MATS; const wall=mats[(Math.random()*mats.length)|0];
   const m=new THREE.Mesh(buildingGeo(w,h,d),[wall,wall,ROOF_MAT,ROOF_MAT,wall,wall]); m.position.set(x,y,z); m.castShadow=solid; m.receiveShadow=true;
   const e={type:'scen',mesh:m,pos:m.position,ownGeo:true}; if(solid) e.boxes=[{x0:x-w/2,x1:x+w/2,y0:0,y1:y+h,z0:z-d/2,z1:z+d/2}];
   return addEnt(e);
 }
-function addPillar(x,z,r,h,solid){
-  const m=new THREE.Mesh(ROCK_COLS[(Math.random()*ROCK_COLS.length)|0],ROCK_COL_MAT); m.scale.set(r,h,r); m.position.set(x,GROUND-1,z); m.rotation.y=rand(0,TAU);
+function addPillar(x,z,r,h,solid,mat){
+  const m=new THREE.Mesh(ROCK_COLS[(Math.random()*ROCK_COLS.length)|0],mat||ROCK_COL_MAT); m.scale.set(r,h,r); m.position.set(x,GROUND-1,z); m.rotation.y=rand(0,TAU);
   m.castShadow=true; m.receiveShadow=true;
   const e={type:'scen',mesh:m,pos:m.position}; if(solid) e.boxes=[{x0:x-r*1.05,x1:x+r*1.05,y0:0,y1:h,z0:z-r*1.05,z1:z+r*1.05}];
   return addEnt(e);
@@ -1745,19 +1869,23 @@ const EVENTS=[
 function runEvents(){ const E=STG.events; while(evIdx<E.length&&dist>=E[evIdx][0]) E[evIdx++][1](); }
 /* ================= stages ================= */
 let envName='';
-const STAGES=[];   // filled below, after both event lists exist
+const STAGES=[];   // filled below, after every stage's event list exists
 let stageIdx=0, STG=null;
+const HEMI_SKY=hemi.color.clone(), HEMI_GROUND=hemi.groundColor.clone(), RIM_COL=rim.color.clone();
 function setEnv(name){
   if(envName===name) return; envName=name; const E=ENV[name];
   scene.background=E.background; scene.environment=E.environment; SUN_DIR.copy(E.sunDir);
   scene.fog.color.copy(E.fogColor); scene.fog.near=E.fogNear; scene.fog.far=E.fogFar;
   sun.color.copy(E.sunColor); sun.intensity=E.sunI; hemi.intensity=E.hemiI; rim.intensity=E.rimI;
+  hemi.color.copy(E.hemiSky||HEMI_SKY); hemi.groundColor.copy(E.hemiGround||HEMI_GROUND); rim.color.copy(E.rimColor||RIM_COL);
   if(finalPass) finalPass.uniforms.exposure.value=E.exposure; else renderer.toneMappingExposure=E.exposure;
-  const planetSide=name==='planet';
-  water.visible=far.visible=planetSide; if(!planetSide) hideTerrain();
-  for(const k of ['trunk','pine','round','rock']) SC[k].m.visible=planetSide;
-  SC.ast.m.visible=SC.ast2.m.visible=!planetSide;
-  spaceSet.visible=dust.visible=!planetSide; if(planetSide) for(const f of FLARE) f.s.visible=false;
+  const planetSide=name==='planet', nya=name==='nyaruga';
+  surface=E.surface; TERR=nya?TERR3:TERR1; hideTerrain();   // the height field differs per world: rebuild the chunks
+  water.visible=surface; water.material=nya?LAVA_MAT:waterMat; far.visible=planetSide; farN.visible=nya;
+  for(const k of ['trunk','pine','round']) SC[k].m.visible=planetSide;
+  SC.rock.m.visible=surface; SC.crystal.m.visible=nya;
+  SC.ast.m.visible=SC.ast2.m.visible=!surface;
+  spaceSet.visible=dust.visible=!surface; if(surface) for(const f of FLARE) f.s.visible=false;
 }
 function useStage(i){ stageIdx=i; STG=STAGES[i]; setEnv(STG.env); }
 function spawnRow(s){ STG.spawn(s); }
@@ -1953,11 +2081,266 @@ const EVENTS2=[
   [6050,()=>{ centerMsg('WARNING','巨大戦艦が接近中',3,true); SFX.alarm(); setSong(null); radio('chip','とんでもなく大きい船だ！ 主砲に気をつけて！'); }],
   [6250,()=>spawnBoss2()],
 ];
+/* ---------- stage 3 set pieces: ニャルガ本星 ---------- */
+const FORT_MATS=['#4a4458','#3c3a4a','#55465e'].map(c=>new THREE.MeshStandardMaterial({color:lin(c),map:WIN_TEX.map,emissiveMap:WIN_TEX.em,emissive:lin('#d070ff'),emissiveIntensity:1.5,roughness:.4,metalness:.5}));
+const ROCK_COL_MAT3=new THREE.MeshStandardMaterial({vertexColors:true,color:lin('#7a6078'),roughness:.9,metalness:0});
+const CRYSTAL_MAT=new THREE.MeshStandardMaterial({color:lin('#e0b8ff'),emissive:lin('#9a3cff'),emissiveIntensity:2.2,roughness:.18,metalness:.1});
+const CRYSTAL_GEO=(()=>{ const parts=[]; [[0,0,1,1],[.55,.2,.55,.62],[-.5,-.15,.5,.55],[.1,-.55,.4,.42]].forEach(([x,z,r,h],i)=>{
+  const g=new THREE.OctahedronGeometry(1,0); g.scale(r*.5,h*.55,r*.5); g.translate(0,h*.5,0); g.rotateZ((i-1.5)*.12); g.translate(x,0,z); parts.push(g); });
+  return mergeGeos(parts.map(g=>{ g.computeVertexNormals(); return g; })); })();
+function addCrystalPillar(x,z,r,h,solid){ // a glowing crystal column; solid ones block the flight path
+  const m=new THREE.Mesh(CRYSTAL_GEO,CRYSTAL_MAT); m.scale.set(r,h,r); m.position.set(x,GROUND-1,z); m.rotation.y=rand(0,TAU); m.castShadow=true;
+  const e={type:'scen',mesh:m,pos:m.position}; if(solid) e.boxes=[{x0:x-r*.55,x1:x+r*.55,y0:0,y1:h*.95,z0:z-r*.55,z1:z+r*.55}];
+  return addEnt(e);
+}
+/* laser gate: a curtain of beams with one gap that slides side to side. Fly through the gap, or shoot the generator on top */
+const GATE_BEAM=new THREE.MeshBasicMaterial({color:hdr('#ff2a5a',6),transparent:true,opacity:.85,blending:THREE.AdditiveBlending,depthWrite:false});
+const GATE_FRAME=M('#2a2234',{r:.35,m:.8});
+function addGate(z,speed){
+  const g=new THREE.Group(); g.position.set(0,0,z);
+  for(const sx of [-1,1]){ const post=new THREE.Mesh(G.box,GATE_FRAME); post.scale.set(4,40,4); post.position.set(sx*41,18,0); g.add(post);
+    const lamp=new THREE.Mesh(G.sphereLo,B('#ff4070',5)); lamp.scale.setScalar(1.2); lamp.position.set(sx*41,38.5,0); g.add(lamp); }
+  const top=new THREE.Mesh(G.box,GATE_FRAME); top.scale.set(86,3,3); top.position.y=36.5; g.add(top);
+  const core=new THREE.Mesh(G.sphere,B('#ff3b5c',5)); core.scale.setScalar(3); core.position.y=36.5; g.add(core);
+  const cglow=glowSprite('#ff3b5c',12); cglow.position.y=36.5; g.add(cglow);
+  const beams=[]; for(let x=-38;x<=38;x+=4){ const b=new THREE.Mesh(G.cyl,GATE_BEAM); b.scale.set(.35,34,.35); b.position.set(x,18,0); g.add(b); beams.push(b); }
+  const guides=[-1,1].map(()=>{ const s=glowSprite('#7dff9b',7); s.position.y=18; g.add(s); return s; });
+  const HALF=8, e={type:'enemy',mesh:g,pos:new V3(0,36.5,z),r:3.6,hp:10,score:3,hittable:true,boom:1.8,t:rand(0,TAU),gx:0};
+  e.update=dt=>{
+    e.t+=dt*(speed||.9); e.gx=Math.sin(e.t)*24;
+    for(const b of beams){ b.visible=Math.abs(b.position.x-e.gx)>HALF; b.scale.x=b.scale.z=.3+Math.random()*.12; }
+    guides.forEach((s,k)=>{ s.position.x=e.gx+(k?HALF:-HALF); });
+    cglow.scale.setScalar(10+Math.sin(T*9)*2);
+    if(state==='play'&&prevRailZ>z&&railZ<=z) for(const p of flying()) if(p.y<36&&Math.abs(p.x-e.gx)>HALF-1.2){ damage(p,20); spark(p.ship.position,'#ff6a8a'); }
+  };
+  e.collide=(e,p)=>{ damage(p,20); killEnemy(e,p); };
+  return addEnt(e);
+}
+/* lava bombs: blobs that burst out of the lava ahead, arc up and fall back. Shoot them or steer clear */
+const LAVA_BALL=B('#ffb040',5);
+function addFireball(x,rz,vy,delay){
+  const g=new THREE.Group(); const core=new THREE.Mesh(G.sphereLo,LAVA_BALL); core.scale.setScalar(2.2); g.add(core); g.add(glowSprite('#ff7a20',11));
+  g.visible=false; g.position.set(x,-3,railZ+rz);
+  const e={type:'enemy',mesh:g,pos:g.position,r:2.8,hp:2,score:1,hittable:true,boom:1.1,vy,t:-(delay||0)};
+  e.update=dt=>{ e.t+=dt; if(e.t<0) return; if(!g.visible){ g.visible=true; for(let i=0;i<6;i++) ember(_v1.set(x,0,e.pos.z),null,1.4); fxFlash(_v1,9,'#ff8a30',.3); }
+    e.vy-=34*dt; e.pos.y+=e.vy*dt; e.pos.x+=Math.sin(e.t*2+x)*dt*3; g.rotation.z+=dt*4;
+    if(Math.random()<dt*30) ember(e.pos,_v2.set(0,0,0),.7); if(Math.random()<dt*12) smoke(e.pos,.6,null,null,.8);
+    if(e.pos.y<-4&&e.vy<0){ e.dead=true; ember(_v1.set(e.pos.x,0,e.pos.z),null,1); } };
+  e.collide=(e,p)=>{ damage(p,15); killEnemy(e,p); };
+  return addEnt(e);
+}
+function wFireballs(n){ for(let i=0;i<n;i++) addFireball(rand(-30,30),-rand(220,380),rand(46,60),i*rand(.35,.6)); }
+function wElite(n){ // the emperor's guard: hover in, fire three-way bursts, then peel away
+  for(let i=0;i<n;i++){ const c=i-(n-1)/2;
+    addFighter(t=>{
+      let z=-520+380*easeOut(Math.min(t/2.6,1)), y=17+Math.sin(t*1.1+i*.9)*7;
+      if(t>9){ const u=t-9; y+=u*u*9; z-=u*u*70; if(t>12) return null; }
+      return {x:c*13+Math.sin(t*.9+i)*9,y,z};
+    },{elite:true,hp:3,score:2,fireAt:[2.8+i*.35,5.2+i*.35,7.6+i*.35]}); }
+}
+function zone3(s){ return s<1600?'lava':s<3450?'fort':s<5250?'gorge':'plaza'; }
+function spawnRow3(s){
+  const z=-s, k=Math.round(s/30), zone=(state==='play'||state==='dying')?zone3(s):'lava';
+  for(const side of [-1,1]){
+    if(zone==='gorge'){ if(Math.random()<.5) plantCrystal(side*rand(46,70),z+rand(-14,14),rand(2,4.5)); continue; }
+    const cnt=zone==='fort'?2:2+(Math.random()<.5?1:0);
+    for(let i=0;i<cnt;i++){
+      const x=side*rand(50,260), zz=z+rand(-14,14);
+      if(zone==='fort'&&Math.abs(x)<200) addBuilding(x,zz,rand(12,24),rand(30,95),rand(12,24),false,FORT_MATS);
+      else if(Math.random()<.55) plantCrystal(x,zz,rand(1.5,4)); else plantRock(x,zz,rand(3,8));
+    }
+  }
+  if(state!=='play'||s<safeUntil||Math.abs(s-STG.cp)<110||boss) return;
+  if(zone==='lava'&&k%3===0&&Math.random()<.7){ const x=rand(-30,30); addPillar(x,z,rand(3.5,5.5),rand(30,70),true,ROCK_COL_MAT3); }
+  if(zone==='fort'&&k%2===0){
+    const two=Math.random()<.45;
+    const x1=two?rand(-30,-12):rand(-30,30), h1=rand(14,50);
+    addBuilding(x1,z,rand(8,14),h1,rand(8,16),true,FORT_MATS);
+    if(Math.random()<.4&&h1<40) addTurret(x1,GROUND+h1,z);
+    if(two){ const x2=Math.min(32,x1+rand(24,38)); addBuilding(x2,z,rand(8,14),rand(14,50),rand(8,16),true,FORT_MATS); }
+  }
+  if(zone==='gorge'&&k%2===0){
+    const x1=rand(-30,30); addCrystalPillar(x1,z,rand(6,9),rand(40,75),true);
+    if(Math.random()<.3){ const x2=x1>0?x1-rand(24,34):x1+rand(24,34); addCrystalPillar(x2,z,rand(5,8),rand(40,75),true); }
+  }
+}
+
+/* ---------- stage 3 boss: 最終兵器ギガニャルガ ----------
+   A giant armoured cat head. Phase 1: two paws that punch across the flight path (dodge up or down) and fire spreads.
+   Phase 2: the eyes open and fire sweeping beams. Phase 3: the mouth opens on the core; everything at once. */
+function spawnBoss3(){
+  const g=new THREE.Group();
+  const armor=M('#2a2036',{r:.28,m:.75,cc:1}), plate=M('#4a3866',{r:.32,m:.6,cc:1}), gold=M('#e0b04a',{r:.22,m:1}), dark=M('#0e0b12',{r:.5,m:.6}), pink=M('#ff7aa8',{r:.4,e:'#ff4f8a',ei:.6});
+  const head=new THREE.Mesh(G.sphere,armor); head.scale.set(19,15,15); g.add(head);
+  const face=new THREE.Mesh(G.sphere,plate); face.scale.set(15,11,5); face.position.set(0,-1,11.5); g.add(face);
+  for(const s of [-1,1]){
+    const ear=new THREE.Mesh(G.cone,armor); ear.scale.set(6.5,14,6.5); ear.position.set(s*11,16,-2); ear.rotation.z=-s*.28; g.add(ear);
+    const inner=new THREE.Mesh(G.cone,pink); inner.scale.set(3.6,9,2); inner.position.set(s*10.6,15,.6); inner.rotation.z=-s*.28; g.add(inner);
+    for(const k of [0,1,2]){ const w=new THREE.Mesh(G.cyl,gold); w.scale.set(.18,11,.18); w.rotation.z=Math.PI/2+s*(k-1)*.18; w.position.set(s*15,-4+k*1.6,13); g.add(w); }
+  }
+  for(let k=0;k<5;k++){ const c=new THREE.Mesh(G.cone,gold); const a=(k-2)*.32; c.scale.set(1.8,4.5+(k===2?2.5:0),1.8); c.position.set(Math.sin(a)*9,13.5+Math.cos(a)*2,-1); c.rotation.z=-a; g.add(c); }
+  const jewel=new THREE.Mesh(G.sphereLo,B('#8dff5a',5)); jewel.scale.setScalar(1.2); jewel.position.set(0,16.5,1.5); g.add(jewel);
+  // eyes behind lids
+  const eyeMat=[0,1].map(()=>B('#9dff6a',6));
+  const eyes=[-1,1].map((s,i)=>{ const o=new THREE.Group(); o.position.set(s*6.5,2.8,15.2); g.add(o);
+    const ball=new THREE.Mesh(G.sphere,eyeMat[i]); ball.scale.set(3.3,1.8,1.2); ball.rotation.z=s*.25; o.add(ball);
+    const lid=new THREE.Mesh(G.sphere,armor); lid.scale.set(3.7,2.3,1.6); lid.rotation.z=s*.25; lid.position.z=.2; o.add(lid);
+    return {o,lid,mat:eyeMat[i]}; });
+  // mouth core behind shutters
+  const coreMat=B('#ff2d55',6);
+  const core=new THREE.Mesh(G.sphere,coreMat); core.scale.setScalar(3.6); core.position.set(0,-6.5,14); g.add(core);
+  const coreGlow=glowSprite('#ff3b5c',13); coreGlow.position.copy(core.position); g.add(coreGlow);
+  const hatches=[-1,1].map(s=>{ const h=new THREE.Mesh(BOSS_GEO.shutter,dark); h.rotation.z=s<0?Math.PI:0; h.position.set(0,-6.5,15.6); h.scale.setScalar(1.15); g.add(h); return h; });
+  shadowy(g,true,false);
+  // paws and the beam live in their own group so they can reach the flight path
+  const extra=new THREE.Group(); scene.add(extra);
+  const paws=[-1,1].map(s=>{
+    const o=new THREE.Group(); extra.add(o);
+    const podMat=new THREE.MeshPhysicalMaterial({color:lin('#4a3866'),roughness:.3,metalness:.6,clearcoat:1,clearcoatRoughness:.1,emissive:new THREE.Color(0,0,0)});
+    const palm=new THREE.Mesh(G.sphere,podMat); palm.scale.set(6,4.6,5.5); o.add(palm);
+    const pad=new THREE.Mesh(G.sphere,pink); pad.scale.set(3,2.2,1); pad.position.set(0,-.6,5.1); o.add(pad);
+    for(let k=0;k<4;k++){ const a=(k-1.5)*.55; const toe=new THREE.Mesh(G.sphere,podMat); toe.scale.set(1.9,1.9,2.2); toe.position.set(Math.sin(a)*5.2,Math.cos(a)*3.4+1,3);
+      o.add(toe); const claw=new THREE.Mesh(G.cone,gold); claw.scale.set(.7,2.6,.7); claw.position.set(Math.sin(a)*6,Math.cos(a)*4.4+1.6,4.5); claw.rotation.x=Math.PI/2.4; o.add(claw); }
+    const glow=glowSprite('#ff5aa8',0); glow.position.z=5; o.add(glow);
+    shadowy(o,true,false); return {o,s,podMat,glow,pos:new V3()}; });
+  const beamMat=new THREE.MeshBasicMaterial({color:hdr('#9dff6a',6),transparent:true,opacity:.9,blending:THREE.AdditiveBlending,depthWrite:false});
+  const beam=new THREE.Mesh(new THREE.CylinderGeometry(1,1,1,16,1,true),beamMat); beam.visible=false; extra.add(beam);
+  g.position.set(0,70,railZ-620); paws.forEach(pw=>pw.o.position.set(pw.s*31,61,railZ-610));
+  const B_={type:'boss',title:'最終兵器ギガニャルガ',mesh:g,pos:g.position,keep:true,hittable:true,phase:'enter',T:0,x:0,y:70,rz:-620,open:0,eyeOpen:0,
+    atk:1.6,swipeCd:3,swipe:null,beam:null,beamCd:3,ringCd:2.5,aimCd:1.4,callCd:9,dieT:0,boomCd:0,volley:0,warned:false,extra};
+  const mkPart=(name,obj,hp,r,flash)=>({part:true,name,obj,hp,max:hp,r,pos:new V3(),alive:true,flashT:0,flash});
+  B_.parts=[mkPart('P0',paws[0].o,32,6.5,paws[0].podMat),mkPart('P1',paws[1].o,32,6.5,paws[1].podMat),mkPart('E0',eyes[0].o,26,3.6,eyes[0].mat),mkPart('E1',eyes[1].o,26,3.6,eyes[1].mat),mkPart('C',core,95,4.6,null)];
+  const P_=B_.parts, coreP=P_[4];
+  B_.targetable=p=>p.alive&&(p.name[0]==='P'||(p.name[0]==='E'&&B_.eyeOpen>.8)||(p.name==='C'&&B_.open>.8));
+  B_.hpRatio=()=>P_.reduce((a,p)=>a+Math.max(0,p.hp),0)/P_.reduce((a,p)=>a+p.max,0);
+  const inHull=(p,pad)=>{ const lx=(p.x-g.position.x)/(19+pad), ly=(p.y-g.position.y)/(15+pad), lz=(p.z-g.position.z)/(16+pad); return lx*lx+ly*ly+lz*lz<1; };
+  B_.shotTest=(a,p,dmg,by)=>{ for(const part of P_){ if(!B_.targetable(part)) continue; if(segSphere(a,p,part.pos,part.r)){ bossDamage(part,dmg,p,by); return true; } }
+    if(inHull(p,0)){ spark(p,'#ffe7a8'); SFX.tink(); return true; } return false; };
+  B_.blast=(pos,R,dmg,by)=>{ for(const part of P_){ if(B_.targetable(part)&&part.pos.distanceTo(pos)<R+part.r) bossDamage(part,dmg,part.pos,by); } };
+  B_.near=(pos,r)=>P_.some(pt=>B_.targetable(pt)&&pt.pos.distanceTo(pos)<pt.r+r)||inHull(pos,r*.5);
+  B_.onPartDead=part=>{
+    if(part.name[0]==='P'){ paws[+part.name[1]].o.visible=false; if(B_.swipe&&B_.swipe.i===+part.name[1]) B_.swipe=null;
+      if(!P_[0].alive&&!P_[1].alive){ B_.phase='eyes'; B_.beamCd=2.5; radio('geruna','ぐぬぬ……我が肉球が！'); radio('chip','目が開いた！ ビームに気をつけて、目をねらって！'); } }
+    if(part.name[0]==='E'&&!P_[2].alive&&!P_[3].alive){ B_.phase='core'; B_.beam=null; beam.visible=false; B_.ringCd=1.5; radio('geruna','ニャんと……目が見えぬ！'); radio('kotetsu','口のコアが開いたぞ！ 一気に決めろ！'); }
+    if(part.name==='C'){ B_.phase='dying'; beam.visible=false; setSong(null); radio('geruna','ニャ、ニャルガ帝国が……こんな犬どもに……！'); }
+  };
+  const aimBeam=(from,to,radius)=>{ _v3.subVectors(to,from); const len=_v3.length(); beam.position.copy(from).addScaledVector(_v3,.5); beam.scale.set(radius,len,radius);
+    beam.quaternion.setFromUnitVectors(UP,_v3.normalize()); };
+  const pawHome=(pw,t)=>_v1.set(g.position.x+pw.s*31,g.position.y-9+Math.sin(t*1.3+pw.s)*2.5,g.position.z+10);
+  B_.update=dt=>{
+    B_.T+=dt; const t=B_.T;
+    let tx=Math.sin(t*.4)*14, ty=17+Math.sin(t*.7)*3, trz=-125;
+    if(B_.phase==='enter'){ const k=Math.min(1,t/5); B_.rz=lerp(-620,-125,easeOut(k)); ty=lerp(70,17,easeInOut(k)); B_.y=ty; tx=0;
+      if(k>=1){ B_.phase='paws'; radio('chip','まずは両手の肉球をこわして！ パンチは上か下によけて！'); } }
+    else if(B_.phase==='dying'){ B_.dieT+=dt; tx=B_.x; ty=B_.y-B_.dieT*2.2; B_.boomCd-=dt;
+      if(B_.boomCd<=0){ B_.boomCd=.1; _v1.set(g.position.x+rand(-18,18),g.position.y+rand(-12,14),g.position.z+rand(-12,12)); explode(_v1,rand(1.2,2.6),_d.set(0,0,-P.speed)); SFX.boom(); shake=.3; }
+      if(B_.dieT>4){ explode(g.position,6,_d.set(0,0,-P.speed)); shock(g.position,200,_d); fxWhite=1; SFX.boomBig(); shake=1.2; B_.dead=true; scene.remove(extra); boss=null; addHits(50,g.position,'BOSS BONUS +50'); startClear(); return; } }
+    else B_.rz=damp(B_.rz,trz,2.5,dt);
+    B_.x=damp(B_.x,tx,1.3,dt); if(B_.phase!=='enter') B_.y=damp(B_.y,Math.max(ty,8),1.3,dt);
+    g.position.set(B_.x,B_.y,railZ+B_.rz); g.rotation.z=Math.sin(t*.6)*.05+(B_.phase==='dying'?B_.dieT*.07:0);
+    if(B_.phase==='eyes'||B_.phase==='core'||B_.phase==='dying') B_.eyeOpen=Math.min(1,B_.eyeOpen+dt*.8);
+    if(B_.phase==='core'||B_.phase==='dying') B_.open=Math.min(1,B_.open+dt*.7);
+    eyes.forEach((e,i)=>{ e.lid.position.y=B_.eyeOpen*2.6; e.lid.scale.y=2.3*(1-B_.eyeOpen*.6); e.o.visible=P_[2+i].alive||B_.eyeOpen<.5; });
+    hatches.forEach((h,k)=>{ h.position.x=(k?1:-1)*B_.open*7.5; });
+    coreGlow.scale.setScalar(9+B_.open*8+Math.sin(t*10)*1.5);
+    // paws: idle beside the head, or in the middle of a punch
+    paws.forEach((pw,i)=>{ if(!P_[i].alive) return; const sw=B_.swipe&&B_.swipe.i===i?B_.swipe:null;
+      if(sw){ const u=sw.t, home=pawHome(pw,t).clone();
+        if(u<1.1){ _v2.set(pw.s*46,u<.9?sw.tgt.y:sw.y,railZ-70); if(u<.9) sw.y=clamp(sw.tgt.y,4,28); pw.o.position.lerp(_v2,1-Math.exp(-6*dt)); }
+        else if(u<1.4) pw.o.position.lerp(_v2.set(pw.s*42,sw.y,railZ),1-Math.exp(-14*dt));
+        else if(u<2.1){ const k=easeInOut((u-1.4)/.7); pw.o.position.set(pw.s*42-pw.s*84*k,sw.y,railZ); }
+        else pw.o.position.lerp(home,1-Math.exp(-5*dt));
+        pw.glow.scale.setScalar(u<1.4?8+Math.sin(T*30)*3:0);
+        pw.o.rotation.set(0,u<2.1?-pw.s*.5:0,pw.s*.3);
+      } else { pw.o.position.lerp(pawHome(pw,t),1-Math.exp(-4*dt)); pw.o.rotation.set(Math.sin(t*1.5+i)*.15,0,pw.s*.25); pw.glow.scale.setScalar(0); } });
+    g.updateMatrixWorld(true); extra.updateMatrixWorld(true);
+    for(const part of P_){ part.obj.getWorldPosition(part.pos);
+      if(part.flashT>0){ part.flashT-=dt; if(part.name==='C') coreMat.color.copy(part.flashT>0?hdr('#ffffff',8):hdr('#ff2d55',6));
+        else if(part.flash.emissive) part.flash.emissive.setScalar(part.flashT>0?1.5:0); else part.flash.color.copy(part.flashT>0?hdr('#ffffff',8):hdr('#9dff6a',6)); } }
+    if(state!=='play'||B_.phase==='enter'||B_.phase==='dying'){ beam.visible=false; return; }
+    // punches: the paw sweeps across the flight path at the height it locked on to
+    if(B_.swipe){ const sw=B_.swipe; sw.t+=dt;
+      if(sw.t>1.1&&sw.t<2.1){ const pp=paws[sw.i].o.position; for(const pl of flying()) if(pl.invul<=0&&pp.distanceTo(pl.ship.position)<7.5){ damage(pl,25); pl.vy+=pl.y>pp.y?20:-20; } }
+      if(sw.t>3) B_.swipe=null; }
+    if(B_.phase==='paws'){
+      B_.swipeCd-=dt; B_.atk-=dt;
+      if(!B_.swipe&&B_.swipeCd<=0){ const alive=[0,1].filter(i=>P_[i].alive); const i=alive[(Math.random()*alive.length)|0];
+        B_.swipe={i,t:0,tgt:pickPilot(),y:12}; B_.swipeCd=rand(3.6,4.6); if(!B_.warned){ B_.warned=true; radio('chip','肉球パンチが来るよ！ 上か下によけて！'); } }
+      if(B_.atk<=0){ B_.atk=1.3; B_.volley++;
+        for(const i of [0,1]){ if(!P_[i].alive||(B_.swipe&&B_.swipe.i===i)) continue; if(B_.volley%2!==i&&B_.volley%5) continue;
+          const from=P_[i].pos; fxFlash(from,5,'#ff6ab0',.15); for(const yaw of B_.volley%5===0?[-.32,-.16,0,.16,.32]:[-.15,0,.15]) enemyShoot(from,{yaw,speed:74,silent:yaw!==0}); } }
+    } else {
+      // eye beams (phase 2), then the core's sweeping beam (phase 3)
+      if(!B_.beam){ B_.beamCd-=dt;
+        if(B_.beamCd<=0){ const src=B_.phase==='eyes'?[2,3].filter(i=>P_[i].alive)[(Math.random()*2)|0]??(P_[2].alive?2:3):4;
+          const tg=pickPilot(); B_.beam={t:0,src,tx:clamp(tg.x,-30,30),ty:clamp(tg.y,4,28),dir:Math.random()<.5?-1:1}; SFX.alarm(); } }
+      else { const bm=B_.beam, from=P_[bm.src].pos, sweep=bm.src===4; bm.t+=dt; const charge=bm.t<1.2, firing=bm.t>=1.2&&bm.t<2.8;
+        if(charge&&!sweep){ const tg=nearPilot(_v2.set(bm.tx,bm.ty,0)); bm.tx=damp(bm.tx,tg.x,2,dt); bm.ty=damp(bm.ty,clamp(tg.y,4,28),2,dt); }
+        const k=charge?0:clamp((bm.t-1.2)/1.6,0,1);
+        const xt=sweep?-bm.dir*44+bm.dir*88*easeInOut(k):bm.tx+bm.dir*k*14;
+        _v1.set(xt,bm.ty,railZ); _v2.subVectors(_v1,from).normalize().multiplyScalar(260).add(from);
+        beam.visible=charge?((bm.t*12)|0)%2===0:firing; aimBeam(from,_v2,charge?.2:(sweep?2.3:1.7)+Math.sin(T*60)*.2); beamMat.opacity=charge?.6:.9;
+        beamMat.color.copy(sweep?hdr('#ff3b6b',6):hdr('#9dff6a',6));
+        if(firing){ if(Math.random()<.5) fxFlash(from,9,sweep?'#ff5a7a':'#b8ff8a',.12);
+          _v3.subVectors(_v2,from); const len2=_v3.lengthSq();
+          for(const pl of flying()){ const sp=pl.ship.position, tt=clamp(_d.subVectors(sp,from).dot(_v3)/len2,0,1); _d.copy(from).addScaledVector(_v3,tt); if(_d.distanceTo(sp)<3.2) damage(pl,22); } }
+        if(bm.t>3.1){ B_.beam=null; beam.visible=false; B_.beamCd=B_.phase==='core'?rand(4.5,6):rand(2.6,3.6); } }
+      B_.ringCd-=dt; B_.aimCd-=dt;
+      if(B_.ringCd<=0){ B_.ringCd=B_.phase==='core'?2.2:3.2; const n=B_.phase==='core'?18:12, off=t*.7, from=B_.phase==='core'?coreP.pos:g.position;
+        for(let k=0;k<n;k++){ const a=off+k/n*TAU; _v1.set(Math.cos(a)*11,Math.sin(a)*11,56); enemyShoot(from,{vel:_v1,silent:k>0,life:5}); } }
+      if(B_.phase==='core'&&B_.aimCd<=0){ B_.aimCd=1.2; for(const s of [-1,1]){ g.localToWorld(_v2.set(s*9,-5,13)); enemyShoot(_v2,{speed:82,silent:s>0}); } }
+      if(B_.phase==='core'){ B_.callCd-=dt; if(B_.callCd<=0){ B_.callCd=11; radio('geruna','近衛隊、出撃ニャ！'); wElite(2); } }
+    }
+    for(const pl of flying()){ const sp=pl.ship.position; if(pl.invul<=0&&inHull(sp,1.2)){ damage(pl,25); pl.vy+=20; } }
+  };
+  boss=addEnt(B_);
+  setSong('boss3');
+}
+
+/* ---------- stage 3 script ---------- */
+const EVENTS3=[
+  [0,()=>{ centerMsg('MISSION START','ニャルガ本星強襲作戦',3); wingmenFlyby(); radio('kotetsu','ここがニャルガ帝国の本星だ。皇帝の城まで一気に突っ込むぞ！'); }],
+  [120,()=>radio('chip','下は溶岩の海だよ！ 低く飛びすぎるとあぶないからね！')],
+  [300,()=>wHeadOn(5,0,15)],
+  [440,()=>{ wFireballs(4); radio('mimi','溶岩が噴き上がってる！ 撃ち落としなさいよ、ハヤテ！'); }],
+  [620,()=>wSweep(5,1,16)],
+  [760,()=>ring('silver',0,13)],
+  [860,()=>wFireballs(5)],
+  [1000,()=>{ radio('kotetsu','黒い機体は皇帝の近衛隊だ。手強いぞ！'); wElite(3); }],
+  [1250,()=>wSnake(1,'laser')],
+  [1400,()=>{ wFireballs(6); ring('gold',rand(-14,14),rand(10,22)); }],
+  [1600,()=>radio('chip','要塞都市だ！ 塔の上の砲台に気をつけて！')],
+  [1720,()=>wTurrets(4)],
+  [1880,()=>{ radio('chip','レーザーゲートだ！ すき間をくぐるか、上の発生装置をこわして！'); addGate(railZ-AHEAD,.8); }],
+  [2100,()=>wHeadOn(6,-6,18)],
+  [2300,()=>addGate(railZ-AHEAD,1)],
+  [2450,()=>{ radio('kotetsu','後ろだ、ハヤテ！'); wBehind(4); }],
+  [2700,()=>{ wElite(3); ringLine(); }],
+  [2900,()=>addGate(railZ-AHEAD,1.25)],
+  [3050,()=>addRing('cp',0,14,-STAGES[2].cp)],
+  [3150,()=>{ wSweep(4,1,20); wSweep(4,-1,10); }],
+  [3350,()=>wSnake(-1,'bomb')],
+  [3650,()=>radio('chip','水晶の谷だ。光る柱にぶつからないでね！')],
+  [3850,()=>{ wMines(8); radio('mimi','ここまで来たら、もう引き返さないわよ！'); }],
+  [4100,()=>wElite(4)],
+  [4300,()=>ring('gold',rand(-14,14),rand(10,22))],
+  [4450,()=>{ wHover(4); wSweep(4,-1,14); }],
+  [4650,()=>addGate(railZ-AHEAD,1.4)],
+  [4850,()=>wHeadOn(8,0,16)],
+  [5050,()=>radio('kotetsu','谷を抜ければ皇帝の城だ！ 全機、気を引きしめろ！')],
+  [5150,()=>wElite(5)],
+  [5350,()=>{ ring('gold',0,18); wSnake(1,'ring'); }],
+  [5600,()=>radio('geruna','よくぞここまで来たニャ……。だがこの最終兵器ギガニャルガで終わりだ！')],
+  [5850,()=>{ centerMsg('WARNING','城から巨大兵器が出撃',3,true); SFX.alarm(); setSong(null); radio('chip','お城から何か出てくる……すごく大きいよ！'); }],
+  [6050,()=>spawnBoss3()],
+];
 STAGES.push(
   {no:1,name:'惑星ポチテラ',en:'Planet Pochiterra',mission:'惑星ポチテラ防衛戦',env:'planet',events:EVENTS,cp:3870,music:'stage',spawn:spawnRow1,bestKey:'stardogs-best',
    clear:[['kotetsu','よくやった、ハヤテ！'],['mimi','ま、あたしの援護のおかげね。'],['chip','ニャルガ軍が撤退していくよ！ 惑星ポチテラは守られたんだ！']]},
   {no:2,name:'マタタビ小惑星帯',en:'Matatabi Belt',mission:'マタタビ小惑星帯追撃戦',env:'space',events:EVENTS2,cp:3970,music:'stage2',spawn:spawnRow2,bestKey:'stardogs-best-2',
-   clear:[['kotetsu','見事だ、ハヤテ。ニャルガ艦隊の空母を沈めたぞ！'],['chip','ゲルニャ司令の船が逃げていくよ！'],['mimi','次はニャルガの本拠地ね。燃えてきたわ！']]}
+   clear:[['kotetsu','見事だ、ハヤテ。ニャルガ艦隊の空母を沈めたぞ！'],['chip','ゲルニャ司令の船が逃げていくよ！'],['mimi','次はニャルガの本拠地ね。燃えてきたわ！']]},
+  {no:3,name:'ニャルガ本星',en:'Planet Nyaruga',mission:'ニャルガ本星強襲作戦',env:'nyaruga',events:EVENTS3,cp:3570,music:'stage3',spawn:spawnRow3,bestKey:'stardogs-best-3',final:true,
+   clear:[['kotetsu','やったぞ！ ニャルガ帝国の最終兵器を倒した！'],['mimi','ふふん、あたしたちにかかればこんなものよ！'],['chip','ニャルガ軍が降伏したって！ 宇宙に平和が戻ったよ！'],['kotetsu','よくやった、スタードッグス。……さあ、ポチテラへ帰ろう。']]}
 );
 useStage(0);
 
@@ -2026,7 +2409,7 @@ function updateCharge(pl,dt){
   if(Math.random()<.6) smoke(p,.5,null,C_SPRAY,.5);
   if(alive(c.target)){ _v1.subVectors(c.target.pos,p).normalize().multiplyScalar(300); c.vel.lerp(_v1,Math.min(1,dt*9)); }
   p.addScaledVector(c.vel,dt); c.mesh.scale.setScalar(6+Math.sin(T*40)*1.2);
-  let hit=c.life<=0||(envName==='planet'&&p.y<.5);
+  let hit=c.life<=0||(surface&&p.y<.5);
   if(!hit) for(const e of ents){ if(e.type!=='enemy'||e.dead||!e.mesh.visible) continue; if(segSphere(c.prev,p,e.pos,e.r+2)){ hit=true; break; } }
   if(!hit&&boss&&boss.near(p,2)) hit=true;
   if(!hit&&hitsSolid(p)) hit=true;
@@ -2044,7 +2427,7 @@ function updateBomb(pl,dt){
   const bomb=pl.bm, blastSpr=bomb.spr;
   if(bomb.active){
     const p=bomb.mesh.position; p.addScaledVector(bomb.vel,dt); bomb.life-=dt; bomb.mesh.scale.setScalar(4+Math.sin(T*30));
-    let hit=bomb.life<=0||(envName==='planet'&&p.y<.5)||(boss&&boss.near(p,3));
+    let hit=bomb.life<=0||(surface&&p.y<.5)||(boss&&boss.near(p,3));
     if(!hit) for(const e of ents) if(e.type==='enemy'&&!e.dead&&e.mesh.visible&&e.pos.distanceTo(p)<e.r+2.5){ hit=true; break; }
     if(hit){ bomb.active=false; bomb.mesh.visible=false; bomb.blast=.01; bomb.pos.copy(p); bomb.hitSet.clear(); fxWhite=.5; shock(p,140); for(let i=0;i<30;i++) ember(p,null,2.5); SFX.boomBig(); shake=.6; if(boss) boss.blast(p,30,10,pl); }
   }
@@ -2192,8 +2575,8 @@ function beginStage(){
 function startDying(){ state='dying'; P.dieT=0; P.exploded=false; setSong(null); P.charge=0; P.lock=null; showTouch(false); radio('kotetsu','ハヤテェーッ！'); }
 function crash(p,dt){ // the burning ship falls away, then blows up
   const ship=p.ship; if(p.exploded) return;
-  p.y-=(6+p.dieT*16)*dt; ship.rotation.z+=dt*9; ship.rotation.x-=dt*.5; ship.position.set(p.x,envName==='planet'?Math.max(p.y,.6):p.y,railZ); if(Math.random()<dt*30) smoke(ship.position,.8,_v2.set(0,0,-P.speed)); if(Math.random()<dt*20) fxFlash(ship.position,3,C_FIRE,.25,_v2);
-  if((envName==='planet'&&p.y<=.6)||p.dieT>1.7){ p.exploded=true; ship.visible=false; explode(ship.position,2.6); SFX.boomBig(); shake=.8; }
+  p.y-=(6+p.dieT*16)*dt; ship.rotation.z+=dt*9; ship.rotation.x-=dt*.5; ship.position.set(p.x,surface?Math.max(p.y,.6):p.y,railZ); if(Math.random()<dt*30) smoke(ship.position,.8,_v2.set(0,0,-P.speed)); if(Math.random()<dt*20) fxFlash(ship.position,3,C_FIRE,.25,_v2);
+  if((surface&&p.y<=.6)||p.dieT>1.7){ p.exploded=true; ship.visible=false; explode(ship.position,2.6); SFX.boomBig(); shake=.8; }
 }
 function updateDying(dt){
   P.dieT+=dt; crash(P,dt);
@@ -2223,7 +2606,7 @@ function respawn(p){
 function gameOver(){ state='result'; setSong('lose'); showResult(false); }
 function startClear(){ state='clear'; P.clearT=0; P.cz=0; showTouch(false); clearCamZ=camera.position.z;
   for(const p of PLAYERS){ p.charge=0; p.lock=null; if(p.down) p.ship.visible=false; }
-  setSong('win'); centerMsg('MISSION COMPLETE','',4.5);
+  setSong('win'); if(STG.final) centerMsg('ALL CLEAR','ニャルガ帝国に勝利！',5.5); else centerMsg('MISSION COMPLETE','',4.5);
   for(const [w,t] of STG.clear) radio(w,t); }
 let clearCamZ=0;
 function updateClear(dt){
@@ -2244,9 +2627,9 @@ function showResult(win){
   if(stageIdx===0&&!coop) best=nb; if(win) markClear(stageIdx); refreshBest();
   $('#resKicker').textContent='Mission '+STG.no+' · '+STG.en+(coop?' · 2P':'');
   const hasNext=win&&stageIdx<STAGES.length-1; $('#nextBtn').hidden=!hasNext;
-  const t=$('#resTitle'); t.textContent=win?'MISSION COMPLETE':'GAME OVER'; t.className='res-title '+(win?'win':'lose');
+  const t=$('#resTitle'); t.textContent=win?(STG.final?'ALL CLEAR':'MISSION COMPLETE'):'GAME OVER'; t.className='res-title '+(win?'win':'lose');
   $('#resHits').textContent=h; $('#resRank').textContent=win?rankOf(h):'—'; $('#resBest').textContent=nb;
-  $('#resNote').textContent=(coop?'1P '+P.kills+'機・2P '+P2.kills+'機。':'')+(win?(h>=100?'撃墜100機以上で勲章を獲得。'+(isBest?'自己ベスト更新！':''):(isBest?'自己ベスト更新！ ':'')+'撃墜100機以上で勲章がもらえます。')
+  $('#resNote').textContent=(coop?'1P '+P.kills+'機・2P '+P2.kills+'機。':'')+(win&&STG.final?'ニャルガ帝国は降伏し、宇宙に平和が戻った。ありがとう、スタードッグス！ ':'')+(win?(h>=100?'撃墜100機以上で勲章を獲得。'+(isBest?'自己ベスト更新！':''):(isBest?'自己ベスト更新！ ':'')+'撃墜100機以上で勲章がもらえます。')
     :'ニャルガ軍の侵攻を止められなかった……。もう一度挑戦しよう。');
   showTouch(false); $('#result').hidden=false; setTimeout(()=>$(hasNext?'#nextBtn':'#retryBtn').focus(),50);
 }
@@ -2296,7 +2679,8 @@ function updatePlayer(p,dt){
   p.x+=p.vx*dt; p.y+=p.vy*dt;
   if(p.x<-XL){ p.x=-XL; if(p.vx<0) p.vx=0; } if(p.x>XL){ p.x=XL; if(p.vx>0) p.vx=0; }
   if(p.y>YMAX){ p.y=YMAX; if(p.vy>0) p.vy=0; }
-  const planetSide=envName==='planet', overWater=planetSide&&terrainH(p.x,railZ)<0;
+  const planetSide=surface, low=terrainH(p.x,railZ)<0, overWater=envName==='planet'&&low;
+  if(envName==='nyaruga'&&low&&p.y<6&&Math.random()<dt*25) ember(_v1.set(p.x+rand(-3,3),.3,railZ+rand(-2,4)),_v2.set(0,rand(4,10),-P.speed*.5),.6); // heat off the lava
   if(overWater&&p.y<5.5){ p.spray-=dt; if(p.spray<=0){ p.spray=.03; for(let i=0;i<2;i++) smoke(_v1.set(p.x+rand(-2.5,2.5),.4,railZ+rand(1,3)),rand(.5,.9),_v2.set(rand(-6,6),rand(4,9),-P.speed*.6),C_SPRAY,rand(.5,.8)); } }
   if(p.y<YMIN){ p.y=YMIN; if(p.vy<0) p.vy=0; if(planetSide&&!overWater){ p.scrape-=dt; if(p.scrape<=0){ p.scrape=.12; spark(_v1.set(p.x+rand(-2,2),GROUND+.3,railZ+1),'#ffd27a'); } if(p.invul<=0) damage(p,4); } }
   if(p.down) return; // scraping the ground just finished this pilot off
@@ -2338,7 +2722,7 @@ function updateShots(dt){
   for(const s of pShots.items){ if(!s.active) continue;
     const p=s.mesh.position; s.prev.copy(p); p.addScaledVector(s.vel,dt); s.life-=dt;
     if(s.life<=0){ release(s); continue; }
-    if(envName==='planet'&&p.y<GROUND){ if(Math.abs(p.x)<44&&terrainH(p.x,p.z)<0) smoke(p,.6,null,C_SPRAY,.5); else spark(p,'#9dffb0'); release(s); continue; }
+    if(surface&&p.y<GROUND){ if(Math.abs(p.x)<44&&terrainH(p.x,p.z)<0){ if(envName==='planet') smoke(p,.6,null,C_SPRAY,.5); else ember(p,null,.5); } else spark(p,'#9dffb0'); release(s); continue; }
     let hit=false;
     for(const e of ents){ if(e.dead||!e.hittable||!e.mesh.visible) continue; if(Math.abs(e.pos.z-p.z)>45) continue;
       if(e.shotTest){ if(e.shotTest(s.prev,p,s.dmg,s.owner)){ hit=true; break; } continue; }
@@ -2351,7 +2735,7 @@ function updateEShots(dt){
   for(const b of eShots.items){ if(!b.active) continue;
     const p=b.mesh.position; b.prev.copy(p); p.x+=b.vel.x*dt; p.y+=b.vel.y*dt; p.z+=(b.vel.z-P.speed)*dt; b.life-=dt;
     b.mesh.scale.setScalar(2.6+Math.sin(T*30+b.life*7)*.4);
-    if(b.life<=0||p.z>camera.position.z+4||p.y<(envName==='planet'?-1:-90)){ release(b); continue; }
+    if(b.life<=0||p.z>camera.position.z+4||p.y<(surface?-1:-90)){ release(b); continue; }
     if(b.harmless||state!=='play') continue;
     b.prev.z-=P.speed*dt;
     if(!b.deflected){
@@ -2437,8 +2821,9 @@ function step(dt){
   for(const p of popups) p.t+=dt; while(popups.length&&popups[0].t>.9) popups.shift();
   // world decor follows camera
   const cp=camera.position;
-  if(envName==='planet'){ far.position.set(cp.x*.2,0,cp.z);
+  if(surface){ far.position.set(cp.x*.2,0,cp.z); farN.position.copy(far.position);
     water.position.set(cp.x,0,cp.z-900); TEX_WATERN.offset.set(water.position.x*150/4200+T*.01,-water.position.z*150/4200+T*.025); WATER_OFF2.set(T*-.013,T*.017);
+    if(envName==='nyaruga'){ TEX_LAVA.offset.set(water.position.x*70/4200+T*.004,-water.position.z*70/4200+T*.006); LAVA_MAT.emissiveIntensity=3+Math.sin(T*1.7)*.5+Math.sin(T*4.3)*.25; }
     updateTerrain(false); }
   else updateSpace(dt);
   sun.target.position.set(Math.round(foc.x*.5),0,Math.round(railZ-55)); sun.position.copy(sun.target.position).addScaledVector(SUN_DIR,330); sun.target.updateMatrixWorld();
@@ -2573,8 +2958,8 @@ const MAP_STAGES=[
     brief:'ニャルガ軍がポチテラに降下した。海から都市を抜けて、敵の機動要塞を叩け！'},
   {stage:1,kind:'belt',name:'マタタビ小惑星帯',en:'Matatabi Belt',area:'小惑星帯・敵艦隊',boss:'宇宙空母クロネコ',
     brief:'敵艦隊は小惑星帯に逃げ込んだ。岩をかわして、空母クロネコを追いつめろ！'},
-  {stage:null,kind:'enemy',name:'ニャルガ本星',en:'Planet Nyaruga',area:'？？？',boss:'？？？',locked:true,
-    brief:'ニャルガ帝国の本拠地だ。今はまだ近づけん……偵察データを集めるぞ。'},
+  {stage:2,kind:'enemy',name:'ニャルガ本星',en:'Planet Nyaruga',area:'溶岩の海・要塞都市・水晶の谷・皇帝の城',boss:'最終兵器ギガニャルガ',
+    brief:'ついにニャルガ帝国の本星だ。溶岩の海と要塞都市を抜けて、皇帝の城を叩け！'},
 ];
 const MAP={i:0,s:0,t:0,cv:null,g:null,w:0,h:0,dpr:1,bg:null,spr:{},pos:[],R:[],typed:0,brief:'',selT:0};
 function readClear(i){ try{ return localStorage.getItem('stardogs-clear-'+i)==='1'; }catch(e){ return false; } }
@@ -2762,11 +3147,13 @@ toTitle();
 { // compile shaders up front so the first enemies and the boss don't stutter
   const warm=new THREE.Group(); [FIGHTER,FIGHTER_GOLD,TURRET,MINE,ARCH].forEach((o,i)=>{ const c=o.clone(); c.position.set(i*8-16,10,-60); warm.add(c); });
   warm.add(new THREE.Mesh(ROCK_COLS[0],ROCK_COL_MAT),new THREE.Mesh(buildingGeo(8,8,8),[BUILD_MATS[0],BUILD_MATS[0],ROOF_MAT,ROOF_MAT,BUILD_MATS[0],BUILD_MATS[0]]),new THREE.Mesh(G.torus,MAT_SILVER),new THREE.Mesh(G.torus,MAT_GOLD),new THREE.Mesh(G.torusBig,MAT_CP));
+  warm.add(FIGHTER_ELITE.clone(),new THREE.Mesh(CRYSTAL_GEO,CRYSTAL_MAT),new THREE.Mesh(ROCK_COLS[0],ROCK_COL_MAT3),new THREE.Mesh(G.plane,LAVA_MAT),
+    new THREE.Mesh(buildingGeo(8,8,8),[FORT_MATS[0],FORT_MATS[0],ROOF_MAT,ROOF_MAT,FORT_MATS[0],FORT_MATS[0]]));
   scene.add(warm); try{ renderer.compile(scene,camera); }catch(e){} scene.remove(warm);
 }
 requestAnimationFrame(frame);
 window.__stardogs={get state(){return state;},P,P2,setCoop,get coop(){return coop;},get dist(){return dist;},get boss(){return boss;},ents,
-  warp(d){ resetWorld(d); },newGame,openMap,MAP,useStage,get EVENTS(){ return STG.events; },get stage(){ return stageIdx; },get env(){ return envName; },audio:A,music,setSong,VOICE,voiceId,get radio(){ return radioCur; },dbg:{addFighter,addMine,addTurret,addRing,explode,killEnemy,spawnBoss2,bossDamage}};
+  warp(d){ resetWorld(d); },newGame,openMap,MAP,useStage,get EVENTS(){ return STG.events; },get stage(){ return stageIdx; },get env(){ return envName; },audio:A,music,setSong,VOICE,voiceId,get radio(){ return radioCur; },dbg:{addFighter,addMine,addTurret,addRing,explode,killEnemy,spawnBoss2,spawnBoss3,addGate,addFireball,bossDamage}};
 }
 if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol)){
   addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(e=>console.warn('service worker',e)); });
